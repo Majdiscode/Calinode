@@ -127,8 +127,8 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
                 )
             ],
             positions: [
-                "chestTouchPullup": CGPoint(x: 60, y: 300),
-                "muscleUp": CGPoint(x: 60, y: 150)
+                "chestTouchPullup": CGPoint(x: 60, y: 250),
+                "muscleUp": CGPoint(x: 60, y: 100)
             ]
         ),
         
@@ -180,9 +180,9 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
                 )
             ],
             positions: [
-                "flexedHang": CGPoint(x: 200, y: 300),
-                "frontLeverTuck": CGPoint(x: 200, y: 200),
-                "frontLever": CGPoint(x: 200, y: 100)
+                "flexedHang": CGPoint(x: 200, y: 250),
+                "frontLeverTuck": CGPoint(x: 200, y: 150),
+                "frontLever": CGPoint(x: 200, y: 80)
             ]
         ),
         
@@ -221,8 +221,8 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
                 )
             ],
             positions: [
-                "archerPullup": CGPoint(x: 340, y: 300),
-                "oneArmPullup": CGPoint(x: 340, y: 150)
+                "archerPullup": CGPoint(x: 340, y: 250),
+                "oneArmPullup": CGPoint(x: 340, y: 120)
             ]
         )
     ],
@@ -245,6 +245,6 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
     ],
     
     masterPositions: [
-        "oneArmFrontLever": CGPoint(x: 200, y: 50)
+        "oneArmFrontLever": CGPoint(x: 200, y: -80)
     ]
 )

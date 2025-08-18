@@ -15,7 +15,7 @@ struct SkillTreeContentView: View {
     var body: some View {
         TabView(selection: .constant(selectedTreeIndex)) {
             ForEach(Array(allEnhancedSkillTrees.enumerated()), id: \.offset) { index, tree in
-                SkillTreeLayoutContainer(
+                UpdatedSkillTreeLayoutContainer(
                     skillManager: skillManager,
                     skillTree: tree
                 )

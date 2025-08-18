@@ -2,7 +2,7 @@
 //  SkillTreeLayoutContainer.swift
 //  TestCaliNode
 //
-//  FIXED - Removed conflicting component declarations
+//  Simplified version with difficulty-based colors
 //
 
 import SwiftUI
@@ -19,12 +19,12 @@ struct SkillTreeLayoutContainer: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Branch selection bar
+            // Branch selection bar (existing logic)
             if !skillTree.branches.isEmpty {
                 branchSelectionView
             }
             
-            // Main skill tree canvas
+            // Main skill tree canvas with difficulty colors
             skillTreeCanvas
         }
         .overlay(overlayContent)
@@ -33,7 +33,7 @@ struct SkillTreeLayoutContainer: View {
         }
     }
     
-    // MARK: - Branch Selection View
+    // MARK: - Branch Selection View (unchanged)
     private var branchSelectionView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
@@ -81,7 +81,7 @@ struct SkillTreeLayoutContainer: View {
         .foregroundColor(selectedBranch == branch.id ? .white : .primary)
     }
     
-    // MARK: - Skill Tree Canvas
+    // MARK: - Skill Tree Canvas with Difficulty Colors
     private var skillTreeCanvas: some View {
         ScrollView {
             ZStack {
@@ -107,18 +107,12 @@ struct SkillTreeLayoutContainer: View {
                let toPos = skillTree.allPositions[skillID] {
                 
                 let isVisible = selectedBranch == nil ||
-                               isSkillInSelectedBranch(skill) ||
-                               skillTree.foundationalSkills.contains(where: { $0.id == reqID })
+                isSkillInSelectedBranch(skill) ||
+                skillTree.foundationalSkills.contains(where: { $0.id == reqID })
                 
-                // Simple line connector (inline to avoid conflicts)
-                Canvas { context, size in
-                    var path = SwiftUI.Path()
-                    path.move(to: fromPos)
-                    path.addLine(to: toPos)
-                    context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 2)
-                }
-                .opacity(isVisible ? 0.6 : 0.1)
-                .animation(.easeInOut(duration: 0.4), value: selectedBranch)
+                MinimalistLineConnector(from: fromPos, to: toPos)
+                    .opacity(isVisible ? 0.6 : 0.1)
+                    .animation(.easeInOut(duration: 0.4), value: selectedBranch)
             }
         }
     }
@@ -133,7 +127,7 @@ struct SkillTreeLayoutContainer: View {
     
     private var foundationalNodes: some View {
         ForEach(skillTree.foundationalSkills) { skill in
-            skillNodeView(skill: skill, branchColor: nil)
+            skillNodeView(skill: skill)
         }
     }
     
@@ -142,7 +136,7 @@ struct SkillTreeLayoutContainer: View {
             Group {
                 if selectedBranch == nil || selectedBranch == branch.id {
                     ForEach(branch.skills) { skill in
-                        skillNodeView(skill: skill, branchColor: Color(hex: branch.color))
+                        skillNodeView(skill: skill)
                     }
                 }
             }
@@ -151,107 +145,50 @@ struct SkillTreeLayoutContainer: View {
     
     private var masterNodes: some View {
         ForEach(skillTree.masterSkills) { skill in
-            skillNodeView(skill: skill, branchColor: Color(hex: "#FFD700"))
+            skillNodeView(skill: skill)
         }
     }
     
-    // MARK: - Enhanced skill rendering with PNG support
-    private func skillNodeView(skill: SkillNode, branchColor: Color?) -> some View {
+    // MARK: - Updated Skill Node with Uniform Bright Blue Colors
+    private func skillNodeView(skill: SkillNode) -> some View {
         Group {
             if let position = skillTree.allPositions[skill.id] {
                 let isVisible = selectedBranch == nil || isSkillInSelectedBranch(skill)
                 let isUnlocked = skillManager.isUnlocked(skill.id)
                 
-                // Skill content rendering
-                ZStack {
-                    // Background circle
-                    Circle()
-                        .fill(isUnlocked ? (branchColor ?? Color(hex: "#0096FF")) : Color.black.opacity(0.8))
-                        .frame(width: 70, height: 70)
-                    
-                    // Smart content - PNG fills entire circle or emoji
-                    Group {
-                        switch skill.id {
-                        case "deadHang":
-                            if UIImage(named: "Deadhang") != nil {
-                                Image("Deadhang")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 70, height: 70)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("🪢").font(.system(size: 28)).foregroundColor(.white)
-                            }
-                        case "pullUp":
-                            if UIImage(named: "PullUp") != nil {
-                                Image("PullUp")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 70, height: 70)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("🆙").font(.system(size: 28)).foregroundColor(.white)
-                            }
-                        case "kneePushup":
-                            if UIImage(named: "KneePush") != nil {
-                                Image("KneePush")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 70, height: 70)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("🦵").font(.system(size: 28)).foregroundColor(.white)
-                            }
-                        case "inclinePushup":
-                            if UIImage(named: "InclinePush") != nil {
-                                Image("InclinePush")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 70, height: 70)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("📐").font(.system(size: 28)).foregroundColor(.white)
-                            }
-                        case "pushup":
-                            if UIImage(named: "Pushup") != nil {
-                                Image("Pushup")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 70, height: 70)
-                                    .clipShape(Circle())
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("🙌").font(.system(size: 28)).foregroundColor(.white)
-                            }
-                        default:
-                            // All other skills use emoji
-                            Text(skill.label)
-                                .font(.system(size: 28))
-                                .foregroundColor(.white)
-                        }
+                // Use uniform bright blue colors for all skills
+                let fillColor = Color(hex: "#00BFFF")      // Bright light blue (Deep Sky Blue)
+                let outlineColor = Color(hex: "#0080FF")   // Slightly darker bright blue
+                
+                Text(skill.label)
+                    .font(.system(size: 28))
+                    .frame(width: 70, height: 70)
+                    .background(
+                        Circle()
+                            .fill(isUnlocked ? fillColor : fillColor.opacity(0.3))
+                    )
+                    .foregroundColor(.black)
+                    .overlay(
+                        Circle()
+                            .stroke(outlineColor, lineWidth: isUnlocked ? 8 : 6)
+                            .opacity(isUnlocked ? 1.0 : 0.8)
+                    )
+                    .shadow(
+                        color: isUnlocked ? outlineColor.opacity(0.4) : .clear,
+                        radius: isUnlocked ? 6 : 0,
+                        x: 0,
+                        y: 2
+                    )
+                    .scaleEffect(isUnlocked ? 1.0 : 0.9)
+                    .position(position)
+                    .id(skill.id)
+                    .opacity(isVisible ? 1.0 : 0.2)
+                    .scaleEffect(isVisible ? 1.0 : 0.7)
+                    .animation(.easeInOut(duration: 0.4), value: isVisible)
+                    .animation(.spring(response: 0.4), value: isUnlocked)
+                    .onTapGesture {
+                        handleSkillTap(skill: skill)
                     }
-                    .opacity(isUnlocked ? 1.0 : 0.7)
-                }
-                .overlay(
-                    Circle()
-                        .stroke(branchColor ?? .white, lineWidth: isUnlocked ? 3 : 1)
-                        .opacity(0.8)
-                )
-                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                .scaleEffect(isUnlocked ? 1.0 : 0.9)
-                .animation(.spring(response: 0.4), value: isUnlocked)
-                .position(position)
-                .id(skill.id)
-                .opacity(isVisible ? 1.0 : 0.2)
-                .scaleEffect(isVisible ? 1.0 : 0.7)
-                .animation(.easeInOut(duration: 0.4), value: isVisible)
-                .onTapGesture {
-                    handleSkillTap(skill: skill)
-                }
             }
         }
     }
@@ -289,12 +226,14 @@ struct SkillTreeLayoutContainer: View {
         Color.black.opacity(0.3)
             .ignoresSafeArea()
             .overlay(
-                // Inline error message to avoid conflicts
-                ErrorMessageView(message: message) {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        prereqMessage = nil
+                CenteredErrorMessage(
+                    message: message,
+                    onDismiss: {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            prereqMessage = nil
+                        }
                     }
-                }
+                )
             )
             .zIndex(9)
     }
@@ -304,7 +243,7 @@ struct SkillTreeLayoutContainer: View {
         guard let selectedBranch = selectedBranch else { return true }
         
         if skillTree.foundationalSkills.contains(where: { $0.id == skill.id }) ||
-           skillTree.masterSkills.contains(where: { $0.id == skill.id }) {
+            skillTree.masterSkills.contains(where: { $0.id == skill.id }) {
             return true
         }
         
@@ -335,63 +274,11 @@ struct SkillTreeLayoutContainer: View {
     }
 }
 
-// MARK: - Inline Error Message Component (to avoid conflicts)
-struct ErrorMessageView: View {
-    let message: String
-    let onDismiss: () -> Void
-    @Environment(\.colorScheme) var colorScheme
-    @State private var animateCard = false
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 32))
-                .foregroundColor(.orange)
-            
-            Text(message)
-                .font(.system(size: 16, weight: .medium))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-                .lineLimit(nil)
-            
-            Button(action: {
-                withAnimation {
-                    animateCard = false
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    onDismiss()
-                }
-            }) {
-                Text("Got it")
-                    .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .clipShape(Capsule())
-            }
-        }
-        .padding(24)
-        .frame(maxWidth: 320, minHeight: 200)
-        .background(
-            RoundedRectangle(cornerRadius: 28)
-                .fill(colorScheme == .dark ? Color(white: 0.12) : Color.white)
-                .shadow(radius: 16)
-        )
-        .padding(.horizontal, 40)
-        .scaleEffect(animateCard ? 1 : 0.9)
-        .opacity(animateCard ? 1 : 0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: animateCard)
-        .onAppear {
-            animateCard = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                if animateCard {
-                    onDismiss()
-                }
-            }
-        }
-        .onTapGesture {
-            onDismiss()
-        }
-    }
+#Preview {
+    SkillTreeLayoutContainer(
+        skillManager: GlobalSkillManager(),
+        skillTree: allEnhancedSkillTrees.pullTree!
+    )
+    .frame(height: 800)
+    .padding()
 }
