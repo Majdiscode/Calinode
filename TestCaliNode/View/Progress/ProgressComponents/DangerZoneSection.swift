@@ -2,14 +2,13 @@
 //  DangerZoneSection.swift
 //  TestCaliNode
 //
-//  Fixed Version - Quest Manager References Removed
+//  Achievement-Free Version - Fixed Reset Method Name
 //
 
 import SwiftUI
 
 struct DangerZoneSection: View {
     @ObservedObject var skillManager: GlobalSkillManager
-    // REMOVED: questManager parameter
     @Binding var showResetConfirmation: Bool
     
     @State private var showSkillResetConfirmation = false
@@ -20,7 +19,7 @@ struct DangerZoneSection: View {
             // Section Header
             sectionHeader
             
-            // Danger Actions (Only skill reset now)
+            // Danger Actions
             VStack(spacing: 12) {
                 DangerActionCard(
                     action: .resetSkills,
@@ -43,10 +42,10 @@ struct DangerZoneSection: View {
                 .stroke(Color.red.opacity(0.2), lineWidth: 1)
         )
         .cornerRadius(20)
-        .alert("Reset All Skills?", isPresented: $showSkillResetConfirmation) {
+        .alert("Reset All Progress?", isPresented: $showSkillResetConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Reset All", role: .destructive) {
-                skillManager.resetAllSkills()
+                skillManager.resetAllProgress()  // ← Fixed method name
             }
         } message: {
             Text("This will permanently delete all your skill progress. This action cannot be undone.")
@@ -67,7 +66,6 @@ struct DangerZoneSection: View {
             
             Spacer()
             
-            // Warning indicator
             Text("⚠️")
                 .font(.title3)
         }
@@ -80,20 +78,19 @@ struct DangerZoneSection: View {
             showSkillResetConfirmation = true
         }
         
-        // Collapse the expanded section
         withAnimation(.easeInOut(duration: 0.3)) {
             expandedSection = nil
         }
     }
 }
 
-// MARK: - Danger Action Enum (Simplified)
+// MARK: - Danger Action Enum
 enum DangerAction: String, CaseIterable {
     case resetSkills = "resetSkills"
     
     var title: String {
         switch self {
-        case .resetSkills: return "Reset All Skills"
+        case .resetSkills: return "Reset All Progress"
         }
     }
     
@@ -105,7 +102,7 @@ enum DangerAction: String, CaseIterable {
     
     var buttonText: String {
         switch self {
-        case .resetSkills: return "Reset All Skills"
+        case .resetSkills: return "Reset All Progress"
         }
     }
     
@@ -157,54 +154,45 @@ struct DangerActionCard: View {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 0 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .animation(.easeInOut(duration: 0.3), value: isExpanded)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
             .buttonStyle(PlainButtonStyle())
             
-            // Expanded content
+            // Expanded Content
             if isExpanded {
                 VStack(alignment: .leading, spacing: 16) {
                     Divider()
-                        .background(action.color.opacity(0.3))
+                        .padding(.vertical, 8)
                     
-                    // Description
                     Text(action.description)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 16)
+                        .fixedSize(horizontal: false, vertical: true)
                     
-                    // Action button
-                    Button(action.buttonText) {
-                        onConfirm()
+                    Button(action: onConfirm) {
+                        HStack {
+                            Image(systemName: action.icon)
+                                .font(.caption)
+                            Text(action.buttonText)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(action.color)
+                        .cornerRadius(8)
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(action.color)
-                    .cornerRadius(8)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .top)),
-                    removal: .opacity.combined(with: .move(edge: .top))
-                ))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(UIColor.secondarySystemBackground))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(action.color.opacity(isExpanded ? 0.5 : 0.2), lineWidth: 1)
-        )
+        .padding(16)
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(12)
         .animation(.easeInOut(duration: 0.3), value: isExpanded)
     }
 }

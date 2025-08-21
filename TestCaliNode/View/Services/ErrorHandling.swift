@@ -2,8 +2,7 @@
 //  ErrorHandling.swift
 //  TestCaliNode
 //
-//  Created by Majd Iskandarani on 7/7/25.
-//  Cleaned Version - Quest Manager Extensions Removed
+//  Fixed Version - Updated Method Names
 //
 
 import Foundation
@@ -314,16 +313,14 @@ extension GlobalSkillManager {
         }
     }
     
-    func resetAllSkillsSafely() {
+    func resetAllProgressSafely() {  // ← Fixed method name
         do {
-            resetAllSkills()
+            resetAllProgress()  // ← Fixed method name
         } catch {
-            ErrorHandler.shared.handle(error, context: "Resetting all skills")
+            ErrorHandler.shared.handle(error, context: "Resetting all progress")
         }
     }
 }
-
-// REMOVED: QuestManager extensions (no longer needed)
 
 extension WorkoutManager {
     
@@ -451,7 +448,7 @@ struct RetryOperation<T> {
     }
 }
 
-// MARK: - Usage Examples (Simplified - Quest Manager Removed)
+// MARK: - Usage Examples
 
 struct SafeOperationExamples: View {
     @ObservedObject var skillManager: GlobalSkillManager

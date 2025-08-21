@@ -99,7 +99,7 @@ struct EnhancedSettingsView: View {
     }
     
     private func resetAllData() {
-        skillManager.resetAllSkills()
+        skillManager.resetAllProgress()
         // REMOVED: Quest manager reset
         FeatureFlagService.shared.resetToDefaults()
         print("🔄 All data reset")

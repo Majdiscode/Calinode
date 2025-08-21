@@ -167,7 +167,7 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
                 ),
                 SkillNode(
                     id: "frontLever",
-                    label: "🦅👑",
+                    label: "🦅",
                     fullLabel: "Front Lever (5s)",
                     tree: "pull",
                     requires: ["frontLeverTuck"],
@@ -182,7 +182,7 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
             positions: [
                 "flexedHang": CGPoint(x: 200, y: 250),
                 "frontLeverTuck": CGPoint(x: 200, y: 150),
-                "frontLever": CGPoint(x: 200, y: 80)
+                "frontLever": CGPoint(x: 200, y: 50)
             ]
         ),
         
@@ -227,24 +227,8 @@ let enhancedPullTreeV1 = EnhancedSkillTreeModel(
         )
     ],
     
-    // MASTER SKILLS
-    masterSkills: [
-        SkillNode(
-            id: "oneArmFrontLever",
-            label: "🦅☝️",
-            fullLabel: "One-Arm Front Lever (2s)",
-            tree: "pull",
-            requires: ["frontLever", "oneArmPullup"],
-            variationLevel: 6,
-            version: 1,
-            confirmPrompt: "Can you hold a front lever for 10 seconds AND do 3 one-arm pull-ups per side?", // ✅ Prerequisites: both isometric and unilateral mastery
-            unlocked: false,
-            masteryLevel: nil,
-            logHistory: []
-        )
-    ],
+    // MASTER SKILLS - COMPLETELY EMPTY NOW
+    masterSkills: [],
     
-    masterPositions: [
-        "oneArmFrontLever": CGPoint(x: 200, y: -80)
-    ]
+    masterPositions: [:]
 )

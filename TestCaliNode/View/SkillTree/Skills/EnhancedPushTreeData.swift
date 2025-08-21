@@ -79,7 +79,7 @@ let enhancedPushTreeV1 = EnhancedSkillTreeModel(
                     requires: ["pushup"],
                     variationLevel: 1,
                     version: 1,
-                    confirmPrompt: "Can you do 2 sets of 10 push-ups?", // ✅ Prerequisite: push-up volume
+                    confirmPrompt: "Can you do 2 sets of 10 push-ups?", // ✅ Prerequisite: solid push-up volume
                     unlocked: false,
                     masteryLevel: nil,
                     logHistory: []
@@ -92,7 +92,7 @@ let enhancedPushTreeV1 = EnhancedSkillTreeModel(
                     requires: ["declinePushup"],
                     variationLevel: 2,
                     version: 1,
-                    confirmPrompt: "Can you do 2 sets of 6 decline push-ups?", // ✅ Prerequisite: decline strength
+                    confirmPrompt: "Can you do 2 sets of 6 decline push-ups?", // ✅ Prerequisite: elevated strength
                     unlocked: false,
                     masteryLevel: nil,
                     logHistory: []
@@ -105,7 +105,7 @@ let enhancedPushTreeV1 = EnhancedSkillTreeModel(
                     requires: ["diamondPushup"],
                     variationLevel: 3,
                     version: 1,
-                    confirmPrompt: "Can you do 2 sets of 4 diamond push-ups?", // ✅ Prerequisite: tricep/close-grip strength
+                    confirmPrompt: "Can you do 2 sets of 4 diamond push-ups?", // ✅ Prerequisite: maximum strength base
                     unlocked: false,
                     masteryLevel: nil,
                     logHistory: []
@@ -245,6 +245,6 @@ let enhancedPushTreeV1 = EnhancedSkillTreeModel(
     ],
     
     masterPositions: [
-        "oneArmHandstandPushup": CGPoint(x: 200, y: 80)
+        "oneArmHandstandPushup": CGPoint(x: 200, y: 20) // Moved higher up from y: 80
     ]
 )

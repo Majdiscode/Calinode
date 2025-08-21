@@ -85,8 +85,7 @@ struct EnhancedSkillTreeLayoutView: View {
             ensureTreeSkillsAreLoaded()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SkillsReset"))) { _ in
-            skillManager.resetAllSkills()
-        }
+            skillManager.resetAllProgress()        }
     }
     
     // MARK: - Fixed: Don't Override All Skills
@@ -342,16 +341,42 @@ struct MinimalistSkillCircle: View {
     }
 }
 
+// MARK: - Updated Minimalist Line Connector
+// Replace the existing MinimalistLineConnector in SkillTreeLayoutView.swift
+
+
+
 struct MinimalistLineConnector: View {
     let from: CGPoint
     let to: CGPoint
     
+    private let nodeRadius: CGFloat = 35 // Half of the 70pt circle size
+    
     var body: some View {
         Canvas { context, size in
+            // Calculate the direction vector
+            let dx = to.x - from.x
+            let dy = to.y - from.y
+            let distance = sqrt(dx * dx + dy * dy)
+            
+            // Normalize the direction vector
+            let unitX = dx / distance
+            let unitY = dy / distance
+            
+            // Calculate connection points at circle edges
+            let startPoint = CGPoint(
+                x: from.x + unitX * nodeRadius,
+                y: from.y + unitY * nodeRadius
+            )
+            let endPoint = CGPoint(
+                x: to.x - unitX * nodeRadius,
+                y: to.y - unitY * nodeRadius
+            )
+            
             var path = SwiftUI.Path()
-            path.move(to: from)
-            path.addLine(to: to)
-            context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 2) // Thinner, more subtle lines
+            path.move(to: startPoint)
+            path.addLine(to: endPoint)
+            context.stroke(path, with: .color(.white), lineWidth: 4) // Bright white
         }
     }
 }

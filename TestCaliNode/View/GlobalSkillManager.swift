@@ -2,7 +2,7 @@
 //  GlobalSkillManager.swift
 //  TestCaliNode
 //
-//  Cleaned Version - Quest Integration Removed
+//  Cleaned Version - All Achievement References Removed - Method Names Fixed
 //
 
 import Foundation
@@ -68,7 +68,7 @@ class GlobalSkillManager: ObservableObject {
         print("🔍 Skills per tree: \(treeCounts.joined(separator: ", "))")
     }
     
-    // MARK: - Skill Management (Quest Integration Removed)
+    // MARK: - Skill Management
     
     func canUnlock(_ skillID: String) -> Bool {
         guard let skill = allSkills[skillID] else { return false }
@@ -82,9 +82,6 @@ class GlobalSkillManager: ObservableObject {
         unlockedSkills.insert(skillID)
         
         saveProgress(skillID)
-        
-        // REMOVED: Quest system integration
-        // No longer notify quest manager or trigger quest events
         
         print("🔓 Unlocked skill: \(skillID)")
     }
@@ -112,112 +109,255 @@ class GlobalSkillManager: ObservableObject {
             return skill.tree == treeID
         }
         
-        let unlockedCount = treeSkills.filter { unlockedSkills.contains($0.id) }.count
-        let totalCount = treeSkills.count
-        
-        print("📊 Tree \(treeID): \(unlockedCount)/\(totalCount) skills")
-        return (unlocked: unlockedCount, total: totalCount)
+        let unlockedCount = treeSkills.filter { isUnlocked($0.id) }.count
+        return (unlocked: unlockedCount, total: treeSkills.count)
+    }
+    
+    var completionPercentage: Double {
+        let totalSkills = allSkills.count
+        guard totalSkills > 0 else { return 0 }
+        return Double(unlockedSkills.count) / Double(totalSkills)
     }
     
     var globalLevel: Int {
         return unlockedSkills.count
     }
     
-    var completionPercentage: Double {
-        guard !allSkills.isEmpty else { return 0 }
-        let percentage = Double(unlockedSkills.count) / Double(allSkills.count)
-        print("📈 Completion: \(unlockedSkills.count)/\(allSkills.count) = \(Int(percentage * 100))%")
-        return percentage
-    }
+    // MARK: - XP System (Skill-Based Only)
     
-    // MARK: - Branch Analytics
-    func getBranchProgress(_ branchID: String, in treeID: String) -> (unlocked: Int, total: Int) {
-        guard let tree = allEnhancedSkillTrees.first(where: { $0.id == treeID }),
-              let branch = tree.branches.first(where: { $0.id == branchID }) else {
-            return (0, 0)
-        }
+    var totalXP: Int {
+        // Base XP per skill
+        let baseXP = unlockedSkills.count * 50
         
-        let branchSkillIDs = branch.skills.map(\.id)
-        let unlockedCount = branchSkillIDs.filter { unlockedSkills.contains($0) }.count
-        return (unlocked: unlockedCount, total: branchSkillIDs.count)
-    }
-    
-    func isBranchMastered(_ branchID: String, in treeID: String) -> Bool {
-        let progress = getBranchProgress(branchID, in: treeID)
-        return progress.unlocked == progress.total && progress.total > 0
-    }
-    
-    // MARK: - Data Loading
-    
-    private func loadUserProgress() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        // Bonus XP for skill types
+        let foundationalBonus = foundationalSkillsUnlocked * 25
+        let branchBonus = branchSkillsUnlocked * 50
+        let masterBonus = masterSkillsUnlocked * 100
         
-        db.collection("profiles").document(uid).getDocument { [weak self] snapshot, error in
-            guard let self = self else { return }
-            
-            if let unlockedMap = snapshot?.data()?["skills"] as? [String: Bool] {
-                DispatchQueue.main.async {
-                    self.unlockedSkills = Set(unlockedMap.filter { $0.value }.map { $0.key })
-                    print("📱 Loaded \(self.unlockedSkills.count) unlocked skills from Firebase")
-                }
-            }
+        return baseXP + foundationalBonus + branchBonus + masterBonus
+    }
+    
+    var currentLevel: Int {
+        return min(Int(sqrt(Double(totalXP) / 100)), 50)
+    }
+    
+    var levelTitle: String {
+        switch currentLevel {
+        case 0: return "Beginner"
+        case 1...5: return "Novice"
+        case 6...15: return "Intermediate"
+        case 16...30: return "Advanced"
+        case 31...50: return "Expert"
+        default: return "Master"
         }
     }
     
-    // MARK: - Data Saving
+    var levelEmoji: String {
+        switch currentLevel {
+        case 0: return "🌱"
+        case 1...5: return "🥉"
+        case 6...15: return "🥈"
+        case 16...30: return "🥇"
+        case 31...50: return "💎"
+        default: return "👑"
+        }
+    }
     
-    internal func saveProgress(_ skillID: String) {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+    var xpForCurrentLevel: Int {
+        return currentLevel * currentLevel * 100
+    }
+    
+    var xpForNextLevel: Int {
+        return (currentLevel + 1) * (currentLevel + 1) * 100
+    }
+    
+    var xpProgressToNextLevel: Int {
+        return totalXP - xpForCurrentLevel
+    }
+    
+    var xpNeededForNextLevel: Int {
+        return xpForNextLevel - totalXP
+    }
+    
+    var levelProgress: Double {
+        let currentLevelXP = xpForCurrentLevel
+        let nextLevelXP = xpForNextLevel
+        let progressXP = totalXP - currentLevelXP
+        let totalProgressNeeded = nextLevelXP - currentLevelXP
         
-        db.collection("profiles").document(uid).setData([
-            "skills": [skillID: true]
+        guard totalProgressNeeded > 0 else { return 1.0 }
+        return Double(progressXP) / Double(totalProgressNeeded)
+    }
+    
+    // MARK: - XP Breakdown (Skills Only)
+    
+    func getXPBreakdown() -> (skillsXP: Int, total: Int) {
+        let skillsXP = totalXP
+        return (skillsXP: skillsXP, total: skillsXP)
+    }
+    
+    func getNextLevelRecommendations() -> [String] {
+        var recommendations: [String] = []
+        
+        if foundationalSkillsUnlocked < totalFoundationalSkills {
+            recommendations.append("Focus on foundational skills for steady progress")
+        }
+        
+        if let weakestTree = getWeakestTree() {
+            recommendations.append("Train \(weakestTree) skills to balance your development")
+        }
+        
+        if availableMasterSkills > 0 {
+            recommendations.append("Master skills available - unlock for massive XP bonus!")
+        }
+        
+        if recommendations.isEmpty {
+            recommendations.append("Keep training consistently to reach the next level")
+        }
+        
+        return recommendations
+    }
+    
+    // MARK: - Skill Type Counts
+    
+    private var foundationalSkillsUnlocked: Int {
+        let foundationalSkills = allEnhancedSkillTrees.flatMap { $0.foundationalSkills }
+        return foundationalSkills.filter { isUnlocked($0.id) }.count
+    }
+    
+    private var totalFoundationalSkills: Int {
+        return allEnhancedSkillTrees.flatMap { $0.foundationalSkills }.count
+    }
+    
+    private var branchSkillsUnlocked: Int {
+        let branchSkills = allEnhancedSkillTrees.flatMap { $0.branches.flatMap { $0.skills } }
+        return branchSkills.filter { isUnlocked($0.id) }.count
+    }
+    
+    private var masterSkillsUnlocked: Int {
+        let masterSkills = allEnhancedSkillTrees.flatMap { $0.masterSkills }
+        return masterSkills.filter { isUnlocked($0.id) }.count
+    }
+    
+    private var availableMasterSkills: Int {
+        let masterSkills = allEnhancedSkillTrees.flatMap { $0.masterSkills }
+        return masterSkills.filter { !isUnlocked($0.id) && canUnlock($0.id) }.count
+    }
+    
+    private func getWeakestTree() -> String? {
+        let treeProgresses = ["pull", "push", "core", "legs"].map { treeID -> (id: String, progress: Double) in
+            let progress = getTreeProgress(treeID)
+            let percentage = progress.total > 0 ? Double(progress.unlocked) / Double(progress.total) : 0
+            return (id: treeID, progress: percentage)
+        }
+        
+        return treeProgresses.min(by: { $0.progress < $1.progress })?.id
+    }
+    
+    // MARK: - Data Persistence
+    
+    private func saveProgress(_ skillID: String) {
+        guard let user = Auth.auth().currentUser else {
+            saveToUserDefaults()
+            return
+        }
+        
+        let userRef = db.collection("users").document(user.uid)
+        let unlockedArray = Array(unlockedSkills)
+        
+        userRef.setData([
+            "unlockedSkills": unlockedArray,
+            "lastUpdated": Timestamp()
         ], merge: true) { error in
             if let error = error {
-                print("❌ Error saving skill \(skillID): \(error.localizedDescription)")
+                print("❌ Error saving progress: \(error.localizedDescription)")
+                self.saveToUserDefaults() // Fallback
             } else {
-                print("💾 Saved skill \(skillID) to Firebase")
+                print("✅ Progress saved to Firebase")
             }
         }
     }
     
-    // MARK: - Reset Functions
+    private func saveToUserDefaults() {
+        let unlockedArray = Array(unlockedSkills)
+        UserDefaults.standard.set(unlockedArray, forKey: "unlockedSkills")
+        print("💾 Progress saved to UserDefaults")
+    }
     
-    func resetAllSkills() {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+    private func loadUserProgress() {
+        guard let user = Auth.auth().currentUser else {
+            loadFromUserDefaults()
+            return
+        }
         
-        let updates = Dictionary(uniqueKeysWithValues: unlockedSkills.map { ("skills.\($0)", FieldValue.delete()) })
-        
-        db.collection("profiles").document(uid).updateData(updates) { [weak self] error in
-            if error == nil {
+        let userRef = db.collection("users").document(user.uid)
+        userRef.getDocument { document, error in
+            if let error = error {
+                print("❌ Error loading progress: \(error.localizedDescription)")
+                self.loadFromUserDefaults()
+                return
+            }
+            
+            if let document = document, document.exists,
+               let data = document.data(),
+               let unlockedArray = data["unlockedSkills"] as? [String] {
                 DispatchQueue.main.async {
-                    self?.unlockedSkills.removeAll()
-                    print("🔄 Reset all skills")
+                    self.unlockedSkills = Set(unlockedArray)
+                    print("✅ Loaded progress from Firebase: \(unlockedArray.count) skills")
                 }
+            } else {
+                self.loadFromUserDefaults()
             }
         }
     }
     
-    func resetTree(_ treeID: String) {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        
-        let treeSkillIDs = allSkills.values.filter { $0.tree == treeID }.map(\.id)
-        let updates = Dictionary(uniqueKeysWithValues: treeSkillIDs.map { ("skills.\($0)", FieldValue.delete()) })
-        
-        db.collection("profiles").document(uid).updateData(updates) { [weak self] error in
-            if error == nil {
-                DispatchQueue.main.async {
-                    for skillID in treeSkillIDs {
-                        self?.unlockedSkills.remove(skillID)
-                    }
-                    print("🔄 Reset tree: \(treeID)")
-                }
+    private func loadFromUserDefaults() {
+        if let unlockedArray = UserDefaults.standard.array(forKey: "unlockedSkills") as? [String] {
+            DispatchQueue.main.async {
+                self.unlockedSkills = Set(unlockedArray)
+                print("📱 Loaded progress from UserDefaults: \(unlockedArray.count) skills")
             }
         }
     }
     
-    // MARK: - Force Refresh
     func forceRefresh() {
         loadAllSkillsFromTrees()
         loadUserProgress()
+    }
+    
+    // MARK: - Reset Functionality (Fixed Method Name)
+    
+    func resetAllProgress() {  // ← This matches what DangerZoneSection expects
+        unlockedSkills.removeAll()
+        
+        // Clear Firebase
+        if let user = Auth.auth().currentUser {
+            db.collection("users").document(user.uid).delete()
+        }
+        
+        // Clear UserDefaults
+        UserDefaults.standard.removeObject(forKey: "unlockedSkills")
+        
+        print("🔄 All progress reset")
+    }
+    
+    func resetTree(_ treeID: String) {
+        let treeSkillIDs = allSkills.values.filter { $0.tree == treeID }.map(\.id)
+        
+        for skillID in treeSkillIDs {
+            unlockedSkills.remove(skillID)
+        }
+        
+        // Update Firebase
+        if let user = Auth.auth().currentUser {
+            let userRef = db.collection("users").document(user.uid)
+            let unlockedArray = Array(unlockedSkills)
+            userRef.setData(["unlockedSkills": unlockedArray], merge: true)
+        }
+        
+        // Update UserDefaults
+        saveToUserDefaults()
+        
+        print("🔄 Reset tree: \(treeID)")
     }
 }

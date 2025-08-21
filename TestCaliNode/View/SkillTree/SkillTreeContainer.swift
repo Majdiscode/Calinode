@@ -2,8 +2,7 @@
 //  SkillTreeContainer.swift
 //  TestCaliNode
 //
-//  FIXED VERSION - Properly synced navigation
-//  REPLACE your existing SkillTreeContainer.swift
+//  FIXED VERSION - Smooth scrolling between all trees
 //
 
 import SwiftUI
@@ -17,7 +16,7 @@ struct SkillTreeContainer: View {
             // Header with tree selection and progress
             headerSection
             
-            // Main content area with TabView
+            // Main content area with TabView - FIXED SCROLLING
             TabView(selection: $selectedTreeIndex) {
                 ForEach(Array(allEnhancedSkillTrees.enumerated()), id: \.offset) { index, tree in
                     SkillTreeLayoutContainer(
@@ -25,91 +24,117 @@ struct SkillTreeContainer: View {
                         skillTree: tree
                     )
                     .tag(index)
+                    .clipped() // Ensure content doesn't overflow
                 }
             }
-            .tabViewStyle(.page)
-            .indexViewStyle(.page(backgroundDisplayMode: .never))
+            .tabViewStyle(.page(indexDisplayMode: .never)) // Remove index dots for cleaner look
+            .animation(.easeInOut(duration: 0.6), value: selectedTreeIndex) // Slower animation
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        // Enhanced drag gesture for smoother transitions - slower threshold
+                        let threshold: CGFloat = 30
+                        if value.translation.width > threshold && selectedTreeIndex > 0 {
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                selectedTreeIndex -= 1
+                            }
+                        } else if value.translation.width < -threshold && selectedTreeIndex < allEnhancedSkillTrees.count - 1 {
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                selectedTreeIndex += 1
+                            }
+                        }
+                    }
+            )
         }
         .navigationBarHidden(true)
     }
     
     // MARK: - Header Section
     private var headerSection: some View {
-        VStack(spacing: 12) {
-            // Current tree info card - NOW UPDATES WITH selectedTreeIndex
+        VStack(spacing: 6) { // Reduced from 12
+            // Current tree info card - Smaller
             if selectedTreeIndex < allEnhancedSkillTrees.count {
                 let tree = allEnhancedSkillTrees[selectedTreeIndex]
                 let metadata = treeMetadata.first { $0.id == tree.id }
                 
                 HStack {
                     Text(metadata?.emoji ?? "🌟")
-                        .font(.system(size: 32))
+                        .font(.system(size: 20)) // Reduced from 32
                     
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(tree.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.headline) // Reduced from title2
+                            .fontWeight(.semibold)
                         
                         Text(metadata?.description ?? "")
-                            .font(.caption)
+                            .font(.caption2) // Reduced from caption
                             .foregroundColor(.secondary)
                     }
                     
                     Spacer()
                     
-                    // Progress indicator
-                    VStack(alignment: .trailing, spacing: 4) {
+                    // Progress indicator - smaller
+                    VStack(alignment: .trailing, spacing: 2) {
                         let progress = skillManager.getTreeProgress(tree.id)
                         let progressPercentage = progress.total > 0 ? Double(progress.unlocked) / Double(progress.total) : 0
                         
                         Text("\(progress.unlocked)/\(progress.total)")
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                            .font(.caption2) // Reduced from caption
+                            .fontWeight(.medium)
                             .foregroundColor(.secondary)
                         
                         ProgressView(value: progressPercentage)
                             .progressViewStyle(LinearProgressViewStyle(tint: progressPercentage == 1.0 ? .green : .blue))
-                            .frame(width: 60)
-                            .scaleEffect(y: 1.5)
+                            .frame(width: 40, height: 4) // Smaller
                     }
                 }
-                .padding(.horizontal, 20)
-                .animation(.easeInOut(duration: 0.3), value: selectedTreeIndex) // Animate changes
+                .padding(10) // Reduced from 16
+                .background(Color(UIColor.secondarySystemBackground))
+                .cornerRadius(8) // Reduced from 12
+                .animation(.easeInOut(duration: 0.6), value: selectedTreeIndex) // Updated duration
             }
             
-            // Tree navigation dots - NOW SYNCED WITH selectedTreeIndex
-            HStack(spacing: 16) {
-                ForEach(Array(allEnhancedSkillTrees.enumerated()), id: \.offset) { index, tree in
+            // Tree navigation dots - Smaller
+            HStack(spacing: 8) { // Reduced from 12
+                ForEach(0..<allEnhancedSkillTrees.count, id: \.self) { index in
                     Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(.easeInOut(duration: 0.6)) { // Updated duration
                             selectedTreeIndex = index
                         }
                     }) {
-                        VStack(spacing: 4) {
-                            let metadata = treeMetadata.first { $0.id == tree.id }
-                            let progress = skillManager.getTreeProgress(tree.id)
-                            let isComplete = progress.unlocked == progress.total && progress.total > 0
-                            let isSelected = selectedTreeIndex == index
-                            
+                        let tree = allEnhancedSkillTrees[index]
+                        let metadata = treeMetadata.first { $0.id == tree.id }
+                        
+                        VStack(spacing: 2) { // Reduced from 4
                             Text(metadata?.emoji ?? "🌟")
-                                .font(.system(size: isSelected ? 24 : 18))
-                                .scaleEffect(isSelected ? 1.2 : 1.0)
-                                .animation(.spring(response: 0.3), value: isSelected)
+                                .font(selectedTreeIndex == index ? .body : .caption) // Smaller
+                                .scaleEffect(selectedTreeIndex == index ? 1.1 : 1.0) // Reduced from 1.2
                             
-                            Circle()
-                                .fill(isSelected ?
-                                     Color(hex: metadata?.color ?? "#3498DB") :
-                                     (isComplete ? .green : .gray.opacity(0.3)))
-                                .frame(width: isSelected ? 8 : 6, height: isSelected ? 8 : 6)
-                                .animation(.spring(response: 0.3), value: isSelected)
+                            Text(tree.name.prefix(4))
+                                .font(.caption2) // Smaller
+                                .fontWeight(selectedTreeIndex == index ? .medium : .regular)
+                                .foregroundColor(selectedTreeIndex == index ? .primary : .secondary)
                         }
+                        .padding(.vertical, 4) // Reduced from 8
+                        .padding(.horizontal, 8) // Reduced from 12
+                        .background(
+                            RoundedRectangle(cornerRadius: 6) // Reduced from 8
+                                .fill(selectedTreeIndex == index ? Color.blue.opacity(0.1) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6) // Reduced from 8
+                                .stroke(selectedTreeIndex == index ? Color.blue : Color.clear, lineWidth: 1)
+                        )
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    .animation(.easeInOut(duration: 0.2), value: selectedTreeIndex)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16) // Reduced from 20
         }
-        .background(Color(UIColor.systemBackground).opacity(0.95))
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .padding(.horizontal, 16) // Reduced from 20
+        .padding(.top, 6) // Reduced from 10
+        .background(Color(UIColor.systemBackground))
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1) // Smaller shadow
     }
 }

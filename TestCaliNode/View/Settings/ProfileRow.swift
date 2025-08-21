@@ -2,7 +2,7 @@
 //  ProfileRow.swift
 //  TestCaliNode
 //
-//  Created by Majd Iskandarani on 7/7/25.
+//  Updated to use XP system - 2024
 //
 
 import SwiftUI
@@ -16,9 +16,8 @@ struct ProfileRow: View {
                 .fill(Color.blue.opacity(0.2))
                 .frame(width: 50, height: 50)
                 .overlay(
-                    Image(systemName: "person.fill")
+                    Text(skillManager.levelEmoji)
                         .font(.title2)
-                        .foregroundColor(.blue)
                 )
             
             VStack(alignment: .leading, spacing: 4) {
@@ -26,11 +25,11 @@ struct ProfileRow: View {
                     .font(.headline)
                     .fontWeight(.semibold)
                 
-                Text("Level \(skillManager.globalLevel) • \(skillManager.unlockedSkills.count) skills unlocked")
+                Text("Level \(skillManager.currentLevel) \(skillManager.levelTitle) • \(skillManager.totalXP) XP")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 
-                ProgressView(value: skillManager.completionPercentage)
+                ProgressView(value: skillManager.levelProgress)
                     .progressViewStyle(LinearProgressViewStyle(tint: .blue))
                     .scaleEffect(y: 1.5)
             }
