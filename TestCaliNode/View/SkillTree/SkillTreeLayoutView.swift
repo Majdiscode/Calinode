@@ -189,13 +189,18 @@ struct EnhancedSkillTreeLayoutView: View {
     private func minimalistConnectorLines() -> some View {
         ForEach(skillTree.allSkills, id: \.id) { skill in
             ForEach(skill.requires, id: \.self) { reqID in
-                if let from = skillTree.allPositions[reqID], let to = skillTree.allPositions[skill.id] {
-                    let isVisible = selectedBranch == nil ||
-                                   isSkillInSelectedBranch(skill) ||
-                                   skillTree.foundationalSkills.contains(where: { $0.id == reqID })
-                    
+                if let from = skillTree.allPositions[reqID],
+                   let to = skillTree.allPositions[skill.id] {
+
+                    // --- NEW: Both ends must be visible ---
+                    let fromVisible = isSkillInSelectedBranch(skillTree.allSkills.first(where: { $0.id == reqID }) ?? skill)
+                    let toVisible = isSkillInSelectedBranch(skill)
+                    let isVisible = selectedBranch == nil || (fromVisible && toVisible)
+                    // ---
+
                     MinimalistLineConnector(from: from, to: to)
-                        .opacity(isVisible ? 0.6 : 0.1) // Much more subtle
+                        .opacity(isVisible ? 0.6 : 0.0)
+                        .scaleEffect(isVisible ? 1.0 : 0.7)
                         .animation(.easeInOut(duration: 0.4), value: selectedBranch)
                 }
             }
@@ -380,3 +385,4 @@ struct MinimalistLineConnector: View {
         }
     }
 }
+

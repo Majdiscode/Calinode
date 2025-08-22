@@ -106,12 +106,13 @@ struct SkillTreeLayoutContainer: View {
             if let fromPos = skillTree.allPositions[reqID],
                let toPos = skillTree.allPositions[skillID] {
                 
-                let isVisible = selectedBranch == nil ||
-                isSkillInSelectedBranch(skill) ||
-                skillTree.foundationalSkills.contains(where: { $0.id == reqID })
-                
+                let prereqSkill = skillTree.allSkills.first(where: { $0.id == reqID })
+                let fromVisible = prereqSkill.map { isSkillInSelectedBranch($0) } ?? false
+                let toVisible = isSkillInSelectedBranch(skill)
+                let isVisible = selectedBranch == nil || (fromVisible && toVisible)
+
                 MinimalistLineConnector(from: fromPos, to: toPos)
-                    .opacity(isVisible ? 0.6 : 0.1)
+                    .opacity(isVisible ? 0.6 : 0.0)
                     .animation(.easeInOut(duration: 0.4), value: selectedBranch)
             }
         }
