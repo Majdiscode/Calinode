@@ -200,7 +200,7 @@ struct ErrorBanner: View {
                 .foregroundColor(error.severity.color)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(error.localizedDescription ?? "Unknown error")
+                Text(error.localizedDescription)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 
@@ -372,7 +372,7 @@ struct ErrorDebugPanel: View {
                                     .foregroundColor(.secondary)
                             }
                             
-                            Text(entry.error.localizedDescription ?? "Unknown error")
+                            Text(entry.error.localizedDescription)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             
