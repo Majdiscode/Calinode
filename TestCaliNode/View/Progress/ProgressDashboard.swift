@@ -2,31 +2,26 @@
 //  ProgressDashboard.swift
 //  TestCaliNode
 //
-//  Achievement-Free Version - Syntax Fixed
+//  Migrated to Electric Gradient Color System - Minimalist Style
 //
 
 import SwiftUI
 
 struct ProgressDashboard: View {
     @ObservedObject var skillManager: GlobalSkillManager
-    @State private var selectedCard: ProgressCardType? = nil
-    @State private var showDetail = false
+    @StateObject private var colorManager = {
+        AppColorManager(useElectricTheme: true)
+    }()
     @State private var showResetConfirmation = false
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 32) {
                 // MARK: - Level & XP Header
                 levelHeader
                 
-                // MARK: - Quick Stats Cards
-                quickStatsCards
-                
                 // MARK: - Skill Tree Overview
                 skillTreeOverview
-                
-                // MARK: - XP Breakdown Card
-                xpBreakdownCard
                 
                 // MARK: - Danger Zone
                 DangerZoneSection(
@@ -34,712 +29,236 @@ struct ProgressDashboard: View {
                     showResetConfirmation: $showResetConfirmation
                 )
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 100)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 120)
         }
         .navigationTitle("Progress")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showDetail) {
-            if let selectedCard = selectedCard {
-                ProgressCardDetailView(card: selectedCard, skillManager: skillManager)
-            }
+        .onAppear {
+            ProgressDashboard.markAsMigrated()
         }
     }
     
     // MARK: - Level Header
     private var levelHeader: some View {
-        VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+        VStack(spacing: 24) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
                         Text(skillManager.levelEmoji)
-                            .font(.largeTitle)
-                        Text("Level \(skillManager.currentLevel)")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundColor(.blue)
+                            .font(.system(size: 48))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Level \(skillManager.currentLevel)")
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .foregroundColor(colorManager.theme.primary)
+                            
+                            Text(skillManager.levelTitle)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(colorManager.theme.text)
+                        }
                     }
-                    
-                    Text(skillManager.levelTitle)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
                 }
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 8) {
                     Text("\(skillManager.totalXP)")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.purple)
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundColor(colorManager.theme.accent)
                     
                     Text("Total XP")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colorManager.theme.textSecondary)
                 }
             }
             
             // XP Progress to Next Level
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 HStack {
-                    Text("Next Level")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    Text("Progress to Next Level")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(colorManager.theme.text)
                     
                     Spacer()
                     
                     Text("\(skillManager.xpProgressToNextLevel) / \(skillManager.xpForNextLevel - skillManager.xpForCurrentLevel) XP")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(colorManager.theme.textSecondary)
                 }
                 
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         // Background
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 8)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(height: 12)
                         
-                        // Progress
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LinearGradient(
-                                colors: [.blue, .purple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ))
-                            .frame(width: geometry.size.width * skillManager.levelProgress, height: 8)
-                            .animation(.easeInOut(duration: 0.6), value: skillManager.levelProgress)
+                        // Progress - Electric Gradient
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colorManager.vibrantButtonGradient)
+                            .frame(width: geometry.size.width * skillManager.levelProgress, height: 12)
+                            .animation(.spring(response: 0.8, dampingFraction: 0.8), value: skillManager.levelProgress)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: 12)
             }
         }
-        .padding(20)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(16)
+        .padding(28)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color(UIColor.secondarySystemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 20, x: 0, y: 10)
+        )
     }
     
-    // MARK: - Quick Stats Cards (2x2 Grid)
-    private var quickStatsCards: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible())
-        ], spacing: 12) {
-            
-            // Skills Overview Card
-            ProgressCard(
-                title: "Skills",
-                value: "\(skillManager.unlockedSkills.count)",
-                subtitle: "of \(totalSkillsCount) total",
-                icon: "star.fill",
-                color: .blue,
-                isInteractive: true
-            ) {
-                selectedCard = .skillsOverview
-                showDetail = true
-            }
-            
-            // Next Goal Card
-            ProgressCard(
-                title: "Next Goal",
-                value: "\(skillManager.xpNeededForNextLevel)",
-                subtitle: "XP to level up",
-                icon: "target",
-                color: .green,
-                isInteractive: true
-            ) {
-                selectedCard = .nextGoal
-                showDetail = true
-            }
-            
-            // Trees Progress Card
-            ProgressCard(
-                title: "Trees",
-                value: "\(completedTreesCount)/4",
-                subtitle: "completed",
-                icon: "tree.fill",
-                color: .orange,
-                isInteractive: true
-            ) {
-                selectedCard = .treesProgress
-                showDetail = true
-            }
-            
-            // Master Skills Card
-            ProgressCard(
-                title: "Elite",
-                value: "\(masterSkillsUnlocked)",
-                subtitle: "master skills",
-                icon: "crown.fill",
-                color: .purple,
-                isInteractive: true
-            ) {
-                selectedCard = .masterSkills
-                showDetail = true
-            }
-        }
-    }
     
     // MARK: - Skill Tree Overview
     private var skillTreeOverview: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 24) {
             Text("Skill Trees")
-                .font(.headline)
-                .fontWeight(.semibold)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(colorManager.theme.text)
             
-            VStack(spacing: 8) {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16)
+            ], spacing: 20) {
                 ForEach(["pull", "push", "core", "legs"], id: \.self) { treeID in
-                    TreeProgressRow(
+                    ModernTreeCard(
                         treeID: treeID,
-                        skillManager: skillManager
+                        skillManager: skillManager,
+                        colorManager: colorManager
                     )
                 }
             }
         }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color(UIColor.secondarySystemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 20, x: 0, y: 10)
+        )
     }
     
-    // MARK: - XP Breakdown Card
-    private var xpBreakdownCard: some View {
-        ProgressCard(
-            title: "XP Breakdown",
-            value: "\(skillManager.totalXP)",
-            subtitle: "tap for details",
-            icon: "chart.bar.fill",
-            color: .cyan,
-            isInteractive: true
-        ) {
-            selectedCard = .xpBreakdown
-            showDetail = true
-        }
-    }
     
-    // MARK: - Computed Properties
-    private var totalSkillsCount: Int {
-        return allEnhancedSkillTrees.flatMap { tree in
-            tree.foundationalSkills + tree.branches.flatMap { $0.skills } + tree.masterSkills
-        }.count
-    }
-    
-    private var completedTreesCount: Int {
-        return ["pull", "push", "core", "legs"].filter { treeID in
-            let progress = skillManager.getTreeProgress(treeID)
-            return progress.unlocked == progress.total && progress.total > 0
-        }.count
-    }
-    
-    private var masterSkillsUnlocked: Int {
-        return allEnhancedSkillTrees.flatMap { $0.masterSkills }
-            .filter { skillManager.isUnlocked($0.id) }.count
-    }
 }
 
-// MARK: - Progress Card
-struct ProgressCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    let isInteractive: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: icon)
-                        .font(.title2)
-                        .foregroundColor(color)
-                    
-                    Spacer()
-                    
-                    if isInteractive {
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Text(value)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.primary)
-                
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(16)
-            .background(Color(UIColor.secondarySystemBackground))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(color.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(!isInteractive)
-    }
-}
 
-// MARK: - Tree Progress Row
-struct TreeProgressRow: View {
+// MARK: - Modern Tree Card
+struct ModernTreeCard: View {
     let treeID: String
     @ObservedObject var skillManager: GlobalSkillManager
+    var colorManager: AppColorManager
     
-    private var treeInfo: (name: String, emoji: String, color: Color) {
+    private func treeInfo(for treeID: String) -> (name: String, emoji: String, color: Color, gradient: LinearGradient) {
         switch treeID {
-        case "pull": return ("Pull", "🆙", .blue)
-        case "push": return ("Push", "🙌", .red)
-        case "core": return ("Core", "🧱", .orange)
-        case "legs": return ("Legs", "🦿", .green)
-        default: return ("Unknown", "❓", .gray)
+        case "pull": 
+            return ("Pull", "🆙", colorManager.theme.primary, 
+                   LinearGradient(colors: [colorManager.theme.primary, colorManager.theme.primary.opacity(0.7)], 
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+        case "push": 
+            return ("Push", "🙌", colorManager.theme.tertiary,
+                   LinearGradient(colors: [colorManager.theme.tertiary, colorManager.theme.tertiary.opacity(0.7)], 
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+        case "core": 
+            return ("Core", "🧱", colorManager.theme.secondary,
+                   LinearGradient(colors: [colorManager.theme.secondary, colorManager.theme.secondary.opacity(0.7)], 
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+        case "legs": 
+            return ("Legs", "🦿", colorManager.theme.accent,
+                   LinearGradient(colors: [colorManager.theme.accent, colorManager.theme.accent.opacity(0.7)], 
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+        default: 
+            return ("Unknown", "❓", colorManager.theme.text,
+                   LinearGradient(colors: [colorManager.theme.text, colorManager.theme.text.opacity(0.7)], 
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
         }
     }
     
     var body: some View {
         let progress = skillManager.getTreeProgress(treeID)
-        let info = treeInfo
+        let info = treeInfo(for: treeID)
         let progressPercent = progress.total > 0 ? Double(progress.unlocked) / Double(progress.total) : 0
         
-        HStack {
-            Text(info.emoji)
-                .font(.title2)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(info.name)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    Spacer()
-                    
-                    Text("\(progress.unlocked)/\(progress.total)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                ProgressView(value: progressPercent)
-                    .progressViewStyle(LinearProgressViewStyle(tint: info.color))
-                    .scaleEffect(y: 0.8)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - Progress Card Types
-enum ProgressCardType {
-    case skillsOverview
-    case nextGoal
-    case treesProgress
-    case masterSkills
-    case xpBreakdown
-}
-
-// MARK: - Card Detail View
-struct ProgressCardDetailView: View {
-    let card: ProgressCardType
-    @ObservedObject var skillManager: GlobalSkillManager
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    switch card {
-                    case .skillsOverview:
-                        SkillsOverviewDetail(skillManager: skillManager)
-                    case .nextGoal:
-                        NextGoalDetail(skillManager: skillManager)
-                    case .treesProgress:
-                        TreesProgressDetail(skillManager: skillManager)
-                    case .masterSkills:
-                        MasterSkillsDetail(skillManager: skillManager)
-                    case .xpBreakdown:
-                        XPBreakdownDetail(skillManager: skillManager)
-                    }
-                }
-                .padding(20)
-            }
-            .navigationTitle(cardTitle)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-    
-    private var cardTitle: String {
-        switch card {
-        case .skillsOverview: return "Skills Overview"
-        case .nextGoal: return "Next Goal"
-        case .treesProgress: return "Tree Progress"
-        case .masterSkills: return "Master Skills"
-        case .xpBreakdown: return "XP Breakdown"
-        }
-    }
-}
-
-// MARK: - Detail Views
-struct SkillsOverviewDetail: View {
-    @ObservedObject var skillManager: GlobalSkillManager
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Skills Breakdown")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            VStack(spacing: 16) {
-                SkillCategoryCard(
-                    title: "Foundational Skills",
-                    unlocked: foundationalCount,
-                    total: totalFoundational,
-                    color: .blue,
-                    icon: "building.2.fill"
-                )
-                
-                SkillCategoryCard(
-                    title: "Branch Skills",
-                    unlocked: branchCount,
-                    total: totalBranch,
-                    color: .green,
-                    icon: "leaf.fill"
-                )
-                
-                SkillCategoryCard(
-                    title: "Master Skills",
-                    unlocked: masterCount,
-                    total: totalMaster,
-                    color: .purple,
-                    icon: "crown.fill"
-                )
-            }
-            
-            Spacer()
-        }
-    }
-    
-    private var foundationalCount: Int {
-        allEnhancedSkillTrees.flatMap { $0.foundationalSkills }
-            .filter { skillManager.isUnlocked($0.id) }.count
-    }
-    
-    private var totalFoundational: Int {
-        allEnhancedSkillTrees.flatMap { $0.foundationalSkills }.count
-    }
-    
-    private var branchCount: Int {
-        allEnhancedSkillTrees.flatMap { $0.branches.flatMap { $0.skills } }
-            .filter { skillManager.isUnlocked($0.id) }.count
-    }
-    
-    private var totalBranch: Int {
-        allEnhancedSkillTrees.flatMap { $0.branches.flatMap { $0.skills } }.count
-    }
-    
-    private var masterCount: Int {
-        allEnhancedSkillTrees.flatMap { $0.masterSkills }
-            .filter { skillManager.isUnlocked($0.id) }.count
-    }
-    
-    private var totalMaster: Int {
-        allEnhancedSkillTrees.flatMap { $0.masterSkills }.count
-    }
-}
-
-struct SkillCategoryCard: View {
-    let title: String
-    let unlocked: Int
-    let total: Int
-    let color: Color
-    let icon: String
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-                .frame(width: 30)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text("\(unlocked) of \(total) unlocked")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            Text("\(total > 0 ? Int((Double(unlocked) / Double(total)) * 100) : 0)%")
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
-    }
-}
-
-struct NextGoalDetail: View {
-    @ObservedObject var skillManager: GlobalSkillManager
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Level Up Progress")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            VStack(spacing: 16) {
-                HStack {
-                    Text("Current Level")
-                    Spacer()
-                    Text("\(skillManager.currentLevel)")
-                        .fontWeight(.bold)
-                }
-                
-                HStack {
-                    Text("Current XP")
-                    Spacer()
-                    Text("\(skillManager.totalXP)")
-                        .fontWeight(.bold)
-                }
-                
-                HStack {
-                    Text("XP Needed")
-                    Spacer()
-                    Text("\(skillManager.xpNeededForNextLevel)")
-                        .fontWeight(.bold)
-                        .foregroundColor(.orange)
-                }
-            }
-            .padding(16)
-            .background(Color(UIColor.secondarySystemBackground))
-            .cornerRadius(12)
-            
-            Text("Recommendations")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(skillManager.getNextLevelRecommendations(), id: \.self) { recommendation in
-                    HStack {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundColor(.yellow)
-                        Text(recommendation)
-                            .font(.subheadline)
-                    }
-                }
-            }
-            .padding(16)
-            .background(Color(UIColor.secondarySystemBackground))
-            .cornerRadius(12)
-            
-            Spacer()
-        }
-    }
-}
-
-struct TreesProgressDetail: View {
-    @ObservedObject var skillManager: GlobalSkillManager
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Tree Progress")
-                .font(.title2)
-                .fontWeight(.bold)
-            
+        VStack(spacing: 20) {
+            // Icon and Title
             VStack(spacing: 12) {
-                ForEach(["pull", "push", "core", "legs"], id: \.self) { treeID in
-                    let progress = skillManager.getTreeProgress(treeID)
-                    let treeInfo = getTreeInfo(treeID)
+                ZStack {
+                    Circle()
+                        .fill(info.gradient)
+                        .frame(width: 70, height: 70)
+                        .shadow(color: info.color.opacity(0.3), radius: 15, x: 0, y: 8)
                     
-                    HStack {
-                        Text(treeInfo.emoji)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(treeInfo.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                    Text(info.emoji)
+                        .font(.system(size: 32))
+                }
+                
+                Text(info.name)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundColor(colorManager.theme.text)
+            }
+            
+            // Progress Section
+            VStack(spacing: 12) {
+                // Progress Number
+                HStack {
+                    Text("\(progress.unlocked)")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(info.color)
+                    
+                    Text("/")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(colorManager.theme.textSecondary)
+                    
+                    Text("\(progress.total)")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(colorManager.theme.textSecondary)
+                }
+                
+                // Progress Bar
+                VStack(spacing: 6) {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // Background
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.15))
+                                .frame(height: 8)
                             
-                            Text("\(progress.unlocked) of \(progress.total) skills")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            // Progress Fill
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(info.gradient)
+                                .frame(width: geometry.size.width * progressPercent, height: 8)
+                                .animation(.spring(response: 0.8, dampingFraction: 0.8), value: progressPercent)
                         }
-                        
-                        Spacer()
-                        
-                        Text("\(progress.total > 0 ? Int((Double(progress.unlocked) / Double(progress.total)) * 100) : 0)%")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(treeInfo.color)
                     }
-                    .padding(16)
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(12)
+                    .frame(height: 8)
+                    
+                    // Percentage
+                    Text("\(Int(progressPercent * 100))% Complete")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(colorManager.theme.textSecondary)
                 }
             }
-            
-            Spacer()
         }
-    }
-    
-    private func getTreeInfo(_ treeID: String) -> (name: String, emoji: String, color: Color) {
-        switch treeID {
-        case "pull": return ("Pull Tree", "🆙", .blue)
-        case "push": return ("Push Tree", "🙌", .red)
-        case "core": return ("Core Tree", "🧱", .orange)
-        case "legs": return ("Legs Tree", "🦿", .green)
-        default: return ("Unknown", "❓", .gray)
-        }
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(UIColor.tertiarySystemBackground))
+                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(info.color.opacity(0.1), lineWidth: 1)
+        )
     }
 }
 
-struct MasterSkillsDetail: View {
-    @ObservedObject var skillManager: GlobalSkillManager
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Master Skills")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            let allMasterSkills = allEnhancedSkillTrees.flatMap { $0.masterSkills }
-            let unlockedMaster = allMasterSkills.filter { skillManager.isUnlocked($0.id) }
-            let lockedMaster = allMasterSkills.filter { !skillManager.isUnlocked($0.id) }
-            
-            if !unlockedMaster.isEmpty {
-                Text("Unlocked")
-                    .font(.headline)
-                    .foregroundColor(.green)
-                
-                ForEach(unlockedMaster, id: \.id) { skill in
-                    MasterSkillCard(skill: skill, isUnlocked: true)
-                }
-            }
-            
-            if !lockedMaster.isEmpty {
-                Text("Available")
-                    .font(.headline)
-                    .foregroundColor(.orange)
-                
-                ForEach(lockedMaster, id: \.id) { skill in
-                    MasterSkillCard(skill: skill, isUnlocked: false)
-                }
-            }
-            
-            Spacer()
-        }
-    }
-}
 
-struct MasterSkillCard: View {
-    let skill: SkillNode
-    let isUnlocked: Bool
-    
-    var body: some View {
-        HStack {
-            Text(skill.label)
-                .font(.title2)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(skill.fullLabel)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text("Tree: \(skill.tree.capitalized)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            Image(systemName: isUnlocked ? "checkmark.circle.fill" : "lock.circle.fill")
-                .foregroundColor(isUnlocked ? .green : .orange)
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
-        .opacity(isUnlocked ? 1.0 : 0.7)
-    }
-}
-
-struct XPBreakdownDetail: View {
-    @ObservedObject var skillManager: GlobalSkillManager
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("XP Breakdown")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            let breakdown = skillManager.getXPBreakdown()
-            
-            VStack(spacing: 12) {
-                XPSourceCard(
-                    title: "Skills XP",
-                    value: breakdown.skillsXP,
-                    color: .blue,
-                    icon: "star.fill"
-                )
-                
-                Divider()
-                
-                XPSourceCard(
-                    title: "Total XP",
-                    value: breakdown.total,
-                    color: .green,
-                    icon: "sum"
-                )
-            }
-            
-            Spacer()
-        }
-    }
-}
-
-struct XPSourceCard: View {
-    let title: String
-    let value: Int
-    let color: Color
-    let icon: String
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-                .frame(width: 30)
-            
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-            
-            Spacer()
-            
-            Text("\(value)")
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-        }
-        .padding(16)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
+// MARK: - Progress Tab Migration
+extension ProgressDashboard {
+    static func markAsMigrated() {
+        ColorMigrationHelper.markComponentMigrated("ProgressDashboard")
+        ColorMigrationHelper.markComponentMigrated("ModernTreeCard")
     }
 }

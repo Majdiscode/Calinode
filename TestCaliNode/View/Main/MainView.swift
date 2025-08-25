@@ -14,6 +14,7 @@ import FirebaseAuth              // 🧩 Google
 struct MainView: View {
     @Environment(\.firebaseSignInWithApple) private var firebaseSignInWithApple  // 🧩 Apple
     @State private var googleUserLoggedIn = (Auth.auth().currentUser != nil)     // 🧩 Google
+    @State private var authListener: AuthStateDidChangeListenerHandle?
 
     var body: some View {
         Group {
@@ -36,8 +37,13 @@ struct MainView: View {
         }
         .onAppear {
             // 🧩 Live Google auth state listener
-            Auth.auth().addStateDidChangeListener { _, user in
+            authListener = Auth.auth().addStateDidChangeListener { _, user in
                 googleUserLoggedIn = (user != nil)
+            }
+        }
+        .onDisappear {
+            if let listener = authListener {
+                Auth.auth().removeStateDidChangeListener(listener)
             }
         }
         .onChange(of: firebaseSignInWithApple.state) { oldValue, newValue in

@@ -2,7 +2,8 @@
 //  FeatureToggleRow.swift
 //  TestCaliNode
 //
-//  Created by Majd Iskandarani on 7/7/25.
+//  Migrated to Electric Gradient Color System
+//  Updated with AppColorSystem integration
 //
 
 import SwiftUI
@@ -11,6 +12,7 @@ struct FeatureToggleRow: View {
     let flag: FeatureFlag
     let title: String
     let description: String
+    var colorManager: AppColorManager
     @ObservedObject private var featureFlags = FeatureFlagService.shared
     
     var body: some View {
@@ -18,10 +20,11 @@ struct FeatureToggleRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
+                    .foregroundColor(colorManager.theme.text)
                 
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(colorManager.theme.textSecondary)
                     .lineLimit(2)
             }
             
@@ -34,7 +37,14 @@ struct FeatureToggleRow: View {
                     print("🚩 \(title) \(enabled ? "enabled" : "disabled")")
                 }
             ))
+            .tint(colorManager.theme.accent)
         }
         .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(colorManager.cardGradient.opacity(0.3))
+                .opacity(featureFlags.isEnabled(flag) ? 1.0 : 0.0)
+                .animation(.easeInOut(duration: 0.3), value: featureFlags.isEnabled(flag))
+        )
     }
 }
