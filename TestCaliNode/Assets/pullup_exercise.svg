@@ -1,0 +1,42 @@
+<svg width="120" height="160" viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pull-up bar -->
+  <rect x="10" y="20" width="100" height="6" rx="3" fill="#8B4513" stroke="#654321" stroke-width="1"/>
+  
+  <!-- Person's head -->
+  <circle cx="60" cy="45" r="8" fill="#FFDBAC" stroke="#E6C2A6" stroke-width="1"/>
+  
+  <!-- Person's torso -->
+  <ellipse cx="60" cy="70" rx="12" ry="18" fill="#4A90E2" stroke="#357ABD" stroke-width="1"/>
+  
+  <!-- Person's arms (bent, gripping bar) -->
+  <!-- Left arm -->
+  <path d="M48 62 Q42 45 45 28" stroke="#FFDBAC" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Right arm -->
+  <path d="M72 62 Q78 45 75 28" stroke="#FFDBAC" stroke-width="4" fill="none" stroke-linecap="round"/>
+  
+  <!-- Hands gripping bar -->
+  <ellipse cx="45" cy="25" rx="3" ry="5" fill="#FFDBAC" stroke="#E6C2A6" stroke-width="1"/>
+  <ellipse cx="75" cy="25" rx="3" ry="5" fill="#FFDBAC" stroke="#E6C2A6" stroke-width="1"/>
+  
+  <!-- Person's legs -->
+  <!-- Left leg -->
+  <path d="M54 88 Q50 110 52 130" stroke="#4169E1" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Right leg -->
+  <path d="M66 88 Q70 110 68 130" stroke="#4169E1" stroke-width="6" fill="none" stroke-linecap="round"/>
+  
+  <!-- Feet -->
+  <ellipse cx="52" cy="132" rx="4" ry="2" fill="#2F2F2F"/>
+  <ellipse cx="68" cy="132" rx="4" ry="2" fill="#2F2F2F"/>
+  
+  <!-- Muscle definition lines -->
+  <line x1="60" y1="62" x2="60" y2="78" stroke="#357ABD" stroke-width="1" opacity="0.6"/>
+  <line x1="54" y1="68" x2="66" y2="68" stroke="#357ABD" stroke-width="1" opacity="0.6"/>
+  
+  <!-- Hair -->
+  <path d="M52 37 Q60 32 68 37" stroke="#8B4513" stroke-width="2" fill="none" stroke-linecap="round"/>
+  
+  <!-- Simple facial features -->
+  <circle cx="57" cy="43" r="1" fill="#333"/>
+  <circle cx="63" cy="43" r="1" fill="#333"/>
+  <path d="M58 47 Q60 49 62 47" stroke="#333" stroke-width="1" fill="none" stroke-linecap="round"/>
+</svg>
