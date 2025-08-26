@@ -234,8 +234,30 @@ class QuestManager: ObservableObject {
     private var skillManager: GlobalSkillManager?
     
     private init() {
-        loadUserData()
-        generateDailyQuests()
+        setupAuthListener()
+    }
+    
+    private func setupAuthListener() {
+        _ = Auth.auth().addStateDidChangeListener { [weak self] (auth, user) in
+            DispatchQueue.main.async {
+                if user != nil {
+                    // User signed in - load their data from Firebase
+                    self?.loadUserData()
+                    self?.generateDailyQuests()
+                } else {
+                    // User signed out - clear all data
+                    self?.clearAllUserData()
+                }
+            }
+        }
+    }
+    
+    private func clearAllUserData() {
+        print("🎯 Clearing quest data for account switch")
+        dailyQuests.removeAll()
+        userProfile = UserCapabilityProfile()
+        userProgress = UserProgress()
+        hasCompletedAssessment = false
     }
     
     // MARK: - Setup & Data Loading
@@ -250,7 +272,10 @@ class QuestManager: ObservableObject {
     
     private func loadUserData() {
         guard let user = Auth.auth().currentUser else {
-            loadFromUserDefaults()
+            // No authenticated user - reset to defaults
+            userProfile = UserCapabilityProfile()
+            userProgress = UserProgress()
+            hasCompletedAssessment = false
             return
         }
         
@@ -258,7 +283,6 @@ class QuestManager: ObservableObject {
         userRef.getDocument { [weak self] document, error in
             if let error = error {
                 print("❌ Error loading user data: \(error.localizedDescription)")
-                self?.loadFromUserDefaults()
                 return
             }
             
@@ -277,37 +301,23 @@ class QuestManager: ObservableObject {
                         self?.userProgress = self?.decodeUserProgress(from: progressData) ?? UserProgress()
                     }
                 } else {
-                    self?.loadFromUserDefaults()
+                    // No data found - use defaults
+                    self?.userProfile = UserCapabilityProfile()
+                    self?.userProgress = UserProgress()
+                    self?.hasCompletedAssessment = false
                 }
             }
         }
     }
     
-    private func loadFromUserDefaults() {
-        if let profileData = UserDefaults.standard.data(forKey: "userCapabilityProfile"),
-           let profile = try? JSONDecoder().decode(UserCapabilityProfile.self, from: profileData) {
-            userProfile = profile
-            hasCompletedAssessment = true
-        }
-        
-        if let progressData = UserDefaults.standard.data(forKey: "userProgress"),
-           let progress = try? JSONDecoder().decode(UserProgress.self, from: progressData) {
-            userProgress = progress
-        }
-    }
+    // Removed loadFromUserDefaults - Firebase only
     
     private func saveUserData() {
-        // Save to UserDefaults as backup
-        if let profileData = try? JSONEncoder().encode(userProfile) {
-            UserDefaults.standard.set(profileData, forKey: "userCapabilityProfile")
+        // Save to Firebase only
+        guard let user = Auth.auth().currentUser else {
+            print("❌ Cannot save user data: No authenticated user")
+            return
         }
-        
-        if let progressData = try? JSONEncoder().encode(userProgress) {
-            UserDefaults.standard.set(progressData, forKey: "userProgress")
-        }
-        
-        // Save to Firebase
-        guard let user = Auth.auth().currentUser else { return }
         
         let userRef = db.collection("users").document(user.uid)
         let profileDict = encodeCapabilityProfile(userProfile)

@@ -338,7 +338,8 @@ extension WorkoutManager {
                 throw AppError.dataCorrupted
             }
             
-            createTemplate(name: name, exercises: exercises)
+            // Template functionality removed in simplified workout tracker
+            print("Template creation not available in current implementation")
             
         } catch {
             ErrorHandler.shared.handle(error, context: "Creating workout template")

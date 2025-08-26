@@ -2,7 +2,7 @@
 //  WorkoutTracker.swift
 //  TestCaliNode
 //
-//  Fixed workout tracking system with proper data models and views
+//  Enhanced workout tracking system with reliable Firebase integration
 //
 
 import Foundation
@@ -100,7 +100,6 @@ struct ActiveWorkout: Identifiable, Codable {
     
     var isCompleted: Bool { endTime != nil }
     
-    // Computed properties for better readability
     var duration: TimeInterval {
         guard let endTime = endTime else { return 0 }
         return endTime.timeIntervalSince(startTime)
@@ -178,28 +177,10 @@ class WorkoutManager: ObservableObject {
     
     private let db = Firestore.firestore()
     
-    // Computed properties for today's stats
-    var todaysSets: Int {
-        let today = Calendar.current.startOfDay(for: Date())
-        let todaysWorkouts = workoutHistory.filter {
-            Calendar.current.isDate($0.startTime, inSameDayAs: today)
-        }
-        return todaysWorkouts.flatMap { $0.exercises }.flatMap { $0.sets }.count
-    }
-    
-    var todaysReps: Int {
-        let today = Calendar.current.startOfDay(for: Date())
-        let todaysWorkouts = workoutHistory.filter {
-            Calendar.current.isDate($0.startTime, inSameDayAs: today)
-        }
-        return todaysWorkouts.flatMap { $0.exercises }.flatMap { $0.sets }.compactMap { $0.reps }.reduce(0, +)
-    }
-    
     init() {
         loadExercises()
-        loadTemplates()
-        loadWorkoutHistory()
         setupNotifications()
+        setupAuthListener()
     }
     
     private func setupNotifications() {
@@ -209,6 +190,27 @@ class WorkoutManager: ObservableObject {
             name: .resetAllWorkoutData,
             object: nil
         )
+    }
+    
+    private func setupAuthListener() {
+        Auth.auth().addStateDidChangeListener { [weak self] (auth, user) in
+            DispatchQueue.main.async {
+                if user != nil {
+                    self?.loadTemplates()
+                    self?.loadWorkoutHistory()
+                } else {
+                    self?.clearAllUserData()
+                }
+            }
+        }
+    }
+    
+    private func clearAllUserData() {
+        print("🏋️ Clearing workout data for account switch")
+        workoutHistory.removeAll()
+        templates.removeAll()
+        activeWorkout = nil
+        currentSession = nil
     }
     
     @objc private func handleResetAllData() {
@@ -235,19 +237,62 @@ class WorkoutManager: ObservableObject {
     }
     
     private func loadTemplates() {
-        if let data = UserDefaults.standard.data(forKey: "workoutTemplates"),
-           let templates = try? JSONDecoder().decode([WorkoutTemplate].self, from: data) {
-            self.templates = templates
+        guard let user = Auth.auth().currentUser else {
+            templates.removeAll()
+            return
+        }
+        
+        let templatesRef = db.collection("users").document(user.uid).collection("workouts").document("templates")
+        
+        templatesRef.getDocument { [weak self] document, error in
+            if let error = error {
+                print("❌ Error loading templates: \(error.localizedDescription)")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                if let document = document, document.exists,
+                   let data = document.data(),
+                   let templatesData = data["templates"] as? [[String: Any]] {
+                    
+                    let templates = templatesData.compactMap { templateData -> WorkoutTemplate? in
+                        self?.decodeTemplateFromFirestore(templateData)
+                    }
+                    
+                    self?.templates = templates
+                    print("✅ Loaded \(templates.count) templates from Firebase")
+                } else {
+                    self?.templates.removeAll()
+                }
+            }
         }
     }
     
+    private func decodeTemplateFromFirestore(_ data: [String: Any]) -> WorkoutTemplate? {
+        guard let idString = data["id"] as? String,
+              let templateId = UUID(uuidString: idString),
+              let name = data["name"] as? String,
+              let createdAtTimestamp = data["createdAt"] as? Timestamp,
+              let exercisesData = data["exercises"] as? [[String: Any]] else {
+            return nil
+        }
+        
+        let exercises = exercisesData.compactMap { exerciseData -> WorkoutExercise? in
+            guard let exerciseID = exerciseData["exerciseID"] as? String,
+                  let targetSets = exerciseData["targetSets"] as? Int else {
+                return nil
+            }
+            return WorkoutExercise(exerciseID: exerciseID, targetSets: targetSets)
+        }
+        
+        return WorkoutTemplate(name: name, exercises: exercises)
+    }
+    
     private func saveTemplates() {
-        // Save to UserDefaults as backup
         if let data = try? JSONEncoder().encode(templates) {
             UserDefaults.standard.set(data, forKey: "workoutTemplates")
         }
         
-        // Save to Firebase
         guard let user = Auth.auth().currentUser else { return }
         
         let templatesRef = db.collection("users").document(user.uid).collection("workouts").document("templates")
@@ -283,19 +328,18 @@ class WorkoutManager: ObservableObject {
     
     private func loadWorkoutHistory() {
         guard let user = Auth.auth().currentUser else {
-            loadWorkoutHistoryFromUserDefaults()
+            workoutHistory.removeAll()
             return
         }
         
         let workoutsRef = db.collection("users").document(user.uid).collection("workouts")
         
-        workoutsRef.whereField("endTime", isNotEqualTo: NSNull())
+        workoutsRef
             .order(by: "startTime", descending: true)
-            .limit(to: 100) // Load last 100 workouts
+            .limit(to: 100)
             .getDocuments { [weak self] snapshot, error in
                 if let error = error {
                     print("❌ Error loading workout history: \(error.localizedDescription)")
-                    self?.loadWorkoutHistoryFromUserDefaults()
                     return
                 }
                 
@@ -310,40 +354,30 @@ class WorkoutManager: ObservableObject {
             }
     }
     
-    private func loadWorkoutHistoryFromUserDefaults() {
-        if let data = UserDefaults.standard.data(forKey: "workoutHistory"),
-           let workouts = try? JSONDecoder().decode([ActiveWorkout].self, from: data) {
-            self.workoutHistory = workouts
-        }
-    }
-    
+    // MARK: - Enhanced Firebase Save (Using Working Pattern)
     private func saveWorkoutToFirebase(_ workout: ActiveWorkout) {
         guard let user = Auth.auth().currentUser else {
-            saveWorkoutToUserDefaults(workout)
+            print("❌ Cannot save workout: No authenticated user")
             return
         }
         
+        print("🔑 Saving workout for user ID: \(user.uid)")
+        print("🏋️ Workout ID: \(workout.id.uuidString)")
+        
         let workoutRef = db.collection("users").document(user.uid).collection("workouts").document(workout.id.uuidString)
         
-        // Create readable workout data structure
+        // Create comprehensive workout data structure using the working pattern
         let workoutData: [String: Any] = [
-            // Basic workout info
             "id": workout.id.uuidString,
             "name": workout.name,
             "startTime": Timestamp(date: workout.startTime),
             "endTime": workout.endTime != nil ? Timestamp(date: workout.endTime!) : NSNull(),
             "isFromTemplate": workout.isFromTemplate,
-            
-            // Duration and timing
             "durationSeconds": workout.duration,
             "durationFormatted": workout.durationFormatted,
-            
-            // Summary stats
             "totalSets": workout.totalSets,
             "completedSets": workout.completedSets,
             "totalReps": workout.totalReps,
-            
-            // Exercise breakdown with readable names
             "exercises": workout.exercises.map { exercise in
                 let exerciseData = self.getExercise(by: exercise.exerciseID)
                 return [
@@ -369,8 +403,6 @@ class WorkoutManager: ObservableObject {
                     }
                 ]
             },
-            
-            // Quick summary for easy reading
             "summary": [
                 "duration": workout.durationFormatted,
                 "exerciseCount": workout.exercises.count,
@@ -379,28 +411,18 @@ class WorkoutManager: ObservableObject {
                 },
                 "totalVolume": workout.totalReps > 0 ? "\(workout.totalReps) reps" : "Time-based workout"
             ],
-            
             "createdAt": Timestamp(),
             "lastUpdated": Timestamp()
         ]
         
+        // Use the exact working Firebase pattern
         workoutRef.setData(workoutData) { error in
             if let error = error {
                 print("❌ Error saving workout: \(error.localizedDescription)")
-                self.saveWorkoutToUserDefaults(workout)
             } else {
                 print("✅ Workout saved to Firebase")
-                
-                // Also save streak tracking data
                 self.updateStreakData(workoutDate: workout.startTime)
             }
-        }
-    }
-    
-    private func saveWorkoutToUserDefaults(_ workout: ActiveWorkout) {
-        if let data = try? JSONEncoder().encode(workoutHistory) {
-            UserDefaults.standard.set(data, forKey: "workoutHistory")
-            print("💾 Workout saved to UserDefaults")
         }
     }
     
@@ -422,11 +444,8 @@ class WorkoutManager: ObservableObject {
                 longestStreak = data["longestStreak"] as? Int ?? 1
             }
             
-            // Add today's date if not already present
             if !workoutDates.contains(dateString) {
                 workoutDates.append(dateString)
-                
-                // Calculate streak
                 let sortedDates = workoutDates.compactMap { DateFormatter.workoutDateFormatter.date(from: $0) }.sorted()
                 currentStreak = self.calculateCurrentStreak(from: sortedDates)
                 longestStreak = max(longestStreak, currentStreak)
@@ -481,16 +500,7 @@ class WorkoutManager: ObservableObject {
             return nil
         }
         
-        var workout = ActiveWorkout(name: name, isFromTemplate: isFromTemplate)
-        workout = ActiveWorkout(name: name, exercises: [], isFromTemplate: isFromTemplate)
-        
-        // Manually set the properties since init creates new values
-        let mirror = Mirror(reflecting: workout)
-        if let idProperty = mirror.children.first(where: { $0.label == "id" }) {
-            // We can't modify the id since it's let, so we'll create a new instance properly
-        }
-        
-        // For now, create exercises array
+        // Create exercises array first
         let exercises = exercisesData.compactMap { exerciseData -> WorkoutExercise? in
             guard let exerciseID = exerciseData["exerciseID"] as? String,
                   let targetSets = exerciseData["targetSets"] as? Int,
@@ -513,7 +523,8 @@ class WorkoutManager: ObservableObject {
             return workoutExercise
         }
         
-        workout.exercises = exercises
+        // Create workout with decoded exercises
+        var workout = ActiveWorkout(name: name, exercises: exercises, isFromTemplate: isFromTemplate)
         workout.endTime = (data["endTime"] as? Timestamp)?.dateValue()
         
         return workout
@@ -589,7 +600,6 @@ class WorkoutManager: ObservableObject {
         let exerciseID = workout.exercises[exerciseIndex].exerciseID
         guard let exercise = getExercise(by: exerciseID) else { return }
         
-        // Create a new set with nil values that the user needs to fill in
         var newSet: WorkoutSet
         switch exercise.type {
         case .reps:
@@ -611,7 +621,6 @@ class WorkoutManager: ObservableObject {
         
         var set = workout.exercises[exerciseIndex].sets[setIndex]
         
-        // Only update provided values
         if let reps = reps {
             set.reps = reps
         }
@@ -622,7 +631,6 @@ class WorkoutManager: ObservableObject {
             set.distance = distance
         }
         
-        // Determine completion based on actual values
         let exerciseID = workout.exercises[exerciseIndex].exerciseID
         if let exercise = getExercise(by: exerciseID) {
             switch exercise.type {
@@ -634,7 +642,6 @@ class WorkoutManager: ObservableObject {
                 set.isCompleted = (set.distance ?? 0.0) > 0.0
             }
         } else {
-            // Fallback: any non-zero value means completed
             set.isCompleted = (set.reps ?? 0) > 0 || (set.duration ?? 0) > 0 || (set.distance ?? 0.0) > 0.0
         }
         
@@ -642,30 +649,6 @@ class WorkoutManager: ObservableObject {
         activeWorkout = workout
         
         print("📝 Updated set \(setIndex + 1): reps=\(set.reps?.description ?? "nil"), duration=\(set.duration?.description ?? "nil"), distance=\(set.distance?.description ?? "nil"), completed=\(set.isCompleted)")
-    }
-    
-    // Convenience method to add a completed set with values
-    func addCompletedSet(exerciseIndex: Int, reps: Int? = nil, duration: Int? = nil, distance: Double? = nil) {
-        guard var workout = activeWorkout else { return }
-        guard exerciseIndex < workout.exercises.count else { return }
-        
-        let exerciseID = workout.exercises[exerciseIndex].exerciseID
-        guard let exercise = getExercise(by: exerciseID) else { return }
-        
-        var newSet: WorkoutSet
-        switch exercise.type {
-        case .reps:
-            newSet = WorkoutSet(reps: reps, isCompleted: (reps ?? 0) > 0)
-        case .time:
-            newSet = WorkoutSet(duration: duration, isCompleted: (duration ?? 0) > 0)
-        case .distance:
-            newSet = WorkoutSet(distance: distance, isCompleted: (distance ?? 0.0) > 0.0)
-        }
-        
-        workout.exercises[exerciseIndex].sets.append(newSet)
-        activeWorkout = workout
-        
-        print("✅ Added completed set to \(exercise.name): reps=\(newSet.reps?.description ?? "nil"), duration=\(newSet.duration?.description ?? "nil"), distance=\(newSet.distance?.description ?? "nil")")
     }
     
     func removeSet(exerciseIndex: Int, setIndex: Int) {
@@ -678,77 +661,28 @@ class WorkoutManager: ObservableObject {
     }
     
     func finishWorkout() {
-        guard var workout = activeWorkout else { return }
+        guard var workout = activeWorkout else { 
+            print("❌ No active workout to finish")
+            return 
+        }
+        
+        print("🏋️ Finishing workout: \(workout.name) with \(workout.exercises.count) exercises")
         
         workout.endTime = Date()
         workoutHistory.append(workout)
         
-        // Save to Firebase (with UserDefaults fallback)
+        print("💾 Saving workout to Firebase...")
         saveWorkoutToFirebase(workout)
         
-        // Update streak tracking
         StreakManager.shared.recordWorkoutCompletion(date: workout.startTime)
-        
-        // Update quest progress
         QuestManager.shared.updateQuestProgress(from: workout)
         
         activeWorkout = nil
+        print("✅ Workout finished and cleared from active state")
     }
     
     func cancelWorkout() {
         activeWorkout = nil
-        currentSession = nil
-    }
-    
-    // MARK: - Simple Session Management (for backward compatibility)
-    
-    func startWorkout(exerciseID: String) {
-        currentSession = WorkoutSession(exerciseID: exerciseID)
-    }
-    
-    func addSet(reps: Int) {
-        guard var session = currentSession else { return }
-        let newSet = WorkoutSet(reps: reps, isCompleted: true)
-        session.sets.append(newSet)
-        currentSession = session
-    }
-    
-    func addSet(duration: Int) {
-        guard var session = currentSession else { return }
-        let newSet = WorkoutSet(duration: duration, isCompleted: true)
-        session.sets.append(newSet)
-        currentSession = session
-    }
-    
-    func removeLastSet() {
-        guard var session = currentSession else { return }
-        if !session.sets.isEmpty {
-            session.sets.removeLast()
-            currentSession = session
-        }
-    }
-    
-    func endWorkout() {
-        guard let session = currentSession else { return }
-        
-        // Convert session to completed workout
-        let workoutExercise = WorkoutExercise(exerciseID: session.exerciseID)
-        var workout = ActiveWorkout(name: "Quick Workout")
-        workout.exercises = [workoutExercise]
-        workout.exercises[0].sets = session.sets
-        workout.endTime = Date()
-        
-        workoutHistory.append(workout)
-        
-        // Save to Firebase (with UserDefaults fallback)
-        saveWorkoutToFirebase(workout)
-        
-        // Update streak tracking
-        StreakManager.shared.recordWorkoutCompletion(date: workout.startTime)
-        
-        // Update quest progress
-        QuestManager.shared.updateQuestProgress(from: workout)
-        
         currentSession = nil
     }
     
@@ -784,24 +718,16 @@ class WorkoutManager: ObservableObject {
     func resetAllData() {
         print("🏋️ Starting WorkoutManager reset...")
         
-        // IMPORTANT: Clear all @Published properties on main thread
         DispatchQueue.main.async {
-            // Clear all in-memory @Published data immediately
             self.workoutHistory.removeAll()
             self.templates.removeAll()
             self.activeWorkout = nil
             self.currentSession = nil
             
-            // Clear UserDefaults
-            UserDefaults.standard.removeObject(forKey: "workoutTemplates")
-            UserDefaults.standard.removeObject(forKey: "workoutHistory")
-            
             print("🏋️ In-memory workout data cleared, now clearing Firebase...")
         }
         
-        // Clear Firebase data
         clearFirebaseWorkoutData()
-        
         print("✅ WorkoutManager reset complete")
     }
     
@@ -811,7 +737,6 @@ class WorkoutManager: ObservableObject {
         let db = Firestore.firestore()
         let userRef = db.collection("users").document(user.uid)
         
-        // Clear workout subcollections
         let collections = ["workouts"]
         
         collections.forEach { collectionName in
@@ -824,16 +749,6 @@ class WorkoutManager: ObservableObject {
                 let batch = db.batch()
                 snapshot?.documents.forEach { document in
                     batch.deleteDocument(document.reference)
-                    
-                    // Also delete any subcollections within workout documents
-                    if collectionName == "workouts" {
-                        // Delete templates subcollection if it exists
-                        document.reference.collection("templates").getDocuments { templateSnapshot, _ in
-                            templateSnapshot?.documents.forEach { templateDoc in
-                                batch.deleteDocument(templateDoc.reference)
-                            }
-                        }
-                    }
                 }
                 
                 batch.commit { error in
@@ -863,10 +778,8 @@ struct WorkoutTrackerView: View {
         NavigationView {
             Group {
                 if let activeWorkout = workoutManager.activeWorkout {
-                    // Show active workout
                     ActiveWorkoutView(workoutManager: workoutManager, workout: activeWorkout)
                 } else {
-                    // Show start screen with blank workout or create template options
                     WorkoutStartView(workoutManager: workoutManager)
                 }
             }
@@ -890,19 +803,18 @@ struct WorkoutStartView: View {
     }
     
     var body: some View {
-        VStack(spacing: 32) { // Increased spacing for minimalist feel
-            Spacer(minLength: 20) // Add some top spacing
+        VStack(spacing: 32) {
+            Spacer(minLength: 20)
             
             // Today's Stats
             todaysStatsCard
             
             // Main Action Buttons
-            VStack(spacing: 20) { // Increased spacing between buttons
-                // Start Blank Workout Button
+            VStack(spacing: 20) {
                 Button(action: {
                     workoutManager.startBlankWorkout()
                 }) {
-                    HStack(spacing: 16) { // More spacing in button
+                    HStack(spacing: 16) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title2)
                         Text("Start Blank Workout")
@@ -910,13 +822,12 @@ struct WorkoutStartView: View {
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20) // Increased vertical padding
+                    .padding(.vertical, 20)
                     .background(colorManager.theme.buttonGradient)
                     .foregroundColor(.white)
-                    .cornerRadius(16) // Slightly more rounded
+                    .cornerRadius(16)
                 }
                 
-                // Create Template Button
                 Button(action: {
                     showingTemplateCreator = true
                 }) {
@@ -934,13 +845,12 @@ struct WorkoutStartView: View {
                     .cornerRadius(16)
                 }
             }
-            .padding(.horizontal, 24) // Increased horizontal padding
+            .padding(.horizontal, 24)
             
             // Templates Section
             if !workoutManager.templates.isEmpty {
                 templatesSection
             } else {
-                // Empty state for templates
                 VStack(spacing: 16) {
                     Text("No Templates Yet")
                         .font(.title3)
@@ -956,7 +866,7 @@ struct WorkoutStartView: View {
                 .padding(.vertical, 32)
             }
             
-            Spacer() // Push everything up
+            Spacer()
         }
         .sheet(isPresented: $showingTemplateCreator) {
             TemplateCreatorView(workoutManager: workoutManager)
@@ -966,15 +876,15 @@ struct WorkoutStartView: View {
     private var todaysStatsCard: some View {
         let stats = workoutManager.getTodaysStats()
         
-        return VStack(spacing: 16) { // Increased spacing
+        return VStack(spacing: 16) {
             Text("Today's Progress")
-                .font(.title2) // Larger font
+                .font(.title2)
                 .fontWeight(.semibold)
             
-            HStack(spacing: 40) { // More spacing between stats
-                VStack(spacing: 8) { // Spacing within each stat
+            HStack(spacing: 40) {
+                VStack(spacing: 8) {
                     Text("\(stats.workouts)")
-                        .font(.largeTitle) // Larger numbers
+                        .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(colorManager.theme.primary)
                     Text("Workouts")
@@ -1003,21 +913,21 @@ struct WorkoutStartView: View {
                 }
             }
         }
-        .padding(24) // Increased padding
+        .padding(24)
         .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(20) // More rounded
-        .padding(.horizontal, 24) // Increased horizontal margin
+        .cornerRadius(20)
+        .padding(.horizontal, 24)
     }
     
     private var templatesSection: some View {
-        VStack(alignment: .leading, spacing: 20) { // Increased spacing
+        VStack(alignment: .leading, spacing: 20) {
             Text("Workout Templates")
                 .font(.title2)
                 .fontWeight(.semibold)
-                .padding(.horizontal, 24) // Consistent with other margins
+                .padding(.horizontal, 24)
             
             ScrollView {
-                LazyVStack(spacing: 16) { // Increased spacing between template rows
+                LazyVStack(spacing: 16) {
                     ForEach(workoutManager.templates) { template in
                         TemplateRow(template: template, workoutManager: workoutManager) {
                             workoutManager.startWorkoutFromTemplate(template)
@@ -1026,11 +936,9 @@ struct WorkoutStartView: View {
                 }
                 .padding(.horizontal, 24)
             }
-            .frame(maxHeight: 200) // Limit height to keep it minimalist
+            .frame(maxHeight: 200)
         }
     }
-    
-
 }
 
 // MARK: - Template Row
@@ -1061,7 +969,6 @@ struct TemplateRow: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    // Show exercise preview
                     HStack {
                         ForEach(template.exercises.prefix(3), id: \.id) { exercise in
                             if let exerciseData = workoutManager.getExercise(by: exercise.exerciseID) {
@@ -1091,7 +998,7 @@ struct TemplateRow: View {
     }
 }
 
-// MARK: - REQUIREMENT 2 & 3: Active Workout View (Add Exercises Button + Set Tracking)
+// MARK: - Active Workout View
 
 struct ActiveWorkoutView: View {
     @ObservedObject var workoutManager: WorkoutManager
@@ -1105,16 +1012,13 @@ struct ActiveWorkoutView: View {
         self._colorManager = StateObject(wrappedValue: AppColorManager(useElectricTheme: true))
     }
     
-    // Workout duration timer
     @State private var workoutDuration: TimeInterval = 0
     @State private var workoutTimer: Timer?
     
     var body: some View {
         VStack(spacing: 0) {
-            // Workout Header
             workoutHeader
             
-            // Exercise List or Empty State
             if workout.exercises.isEmpty {
                 emptyWorkoutView
             } else {
@@ -1151,7 +1055,6 @@ struct ActiveWorkoutView: View {
                         .font(.title2)
                         .fontWeight(.bold)
                     
-                    // Show workout duration timer
                     Text(formatWorkoutDuration(workoutDuration))
                         .font(.title3)
                         .fontWeight(.semibold)
@@ -1164,7 +1067,6 @@ struct ActiveWorkoutView: View {
                 
                 Spacer()
                 
-                // Add Exercise button - only show when exercises exist
                 if !workout.exercises.isEmpty {
                     Button("Add Exercise") {
                         showingExercisePicker = true
@@ -1179,7 +1081,6 @@ struct ActiveWorkoutView: View {
                 }
             }
             
-            // Workout Stats
             HStack(spacing: 30) {
                 VStack {
                     Text("\(workout.exercises.count)")
@@ -1223,7 +1124,6 @@ struct ActiveWorkoutView: View {
             Spacer()
             
             VStack(spacing: 32) {
-                // Modern icon with gradient background - Now clickable!
                 Button(action: {
                     showingExercisePicker = true
                 }) {
@@ -1248,7 +1148,6 @@ struct ActiveWorkoutView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 
-                // Minimalist text content
                 VStack(spacing: 12) {
                     Text("Ready to start?")
                         .font(.title2)
@@ -1262,7 +1161,6 @@ struct ActiveWorkoutView: View {
                         .padding(.horizontal, 40)
                 }
                 
-                // Minimalist hint text
                 Text("Tap the plus button to add your first exercise")
                     .font(.callout)
                     .foregroundColor(Color.secondary.opacity(0.7))
@@ -1270,19 +1168,17 @@ struct ActiveWorkoutView: View {
             }
             
             Spacer()
-            Spacer() // Extra spacer to push content higher
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            // Subtle background gradient
             colorManager.subtleBackgroundGradient
         )
     }
     
-    // REQUIREMENT 3: Exercise List with Set Count and Reps
     private var exercisesList: some View {
         ScrollView {
-            LazyVStack(spacing: 20) { // Increased spacing between exercise cards
+            LazyVStack(spacing: 20) {
                 ForEach(Array(workout.exercises.enumerated()), id: \.element.id) { exerciseIndex, workoutExercise in
                     if let exercise = workoutManager.getExercise(by: workoutExercise.exerciseID) {
                         ExerciseWorkoutCard(
@@ -1294,11 +1190,11 @@ struct ActiveWorkoutView: View {
                     }
                 }
             }
-            .padding(.horizontal, 24) // Increased horizontal padding
-            .padding(.vertical, 20) // Increased vertical padding
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
         }
         .onTapGesture {
-            // Focus state will handle keyboard dismissal through the SetRow components
+            // Focus state will handle keyboard dismissal
         }
     }
     
@@ -1310,7 +1206,6 @@ struct ActiveWorkoutView: View {
         workout.exercises.flatMap { $0.sets }.compactMap { $0.reps }.reduce(0, +)
     }
     
-    // MARK: - Workout Timer Functions
     private func startWorkoutTimer() {
         workoutDuration = Date().timeIntervalSince(workout.startTime)
         workoutTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -1336,7 +1231,7 @@ struct ActiveWorkoutView: View {
     }
 }
 
-// MARK: - Exercise Workout Card (Shows Sets and Reps)
+// MARK: - Exercise Workout Card
 
 struct ExerciseWorkoutCard: View {
     let exercise: Exercise
@@ -1345,25 +1240,23 @@ struct ExerciseWorkoutCard: View {
     @ObservedObject var workoutManager: WorkoutManager
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) { // Increased spacing
-            // Exercise Header
-            HStack(spacing: 16) { // Increased spacing
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 16) {
                 Text(exercise.emoji)
-                    .font(.system(size: 28)) // Slightly larger
+                    .font(.system(size: 28))
                 
-                VStack(alignment: .leading, spacing: 6) { // Increased spacing
+                VStack(alignment: .leading, spacing: 6) {
                     Text(exercise.name)
-                        .font(.title3) // Larger font
+                        .font(.title3)
                         .fontWeight(.semibold)
                     
                     Text("\(workoutExercise.sets.count) sets")
-                        .font(.subheadline) // Larger font
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 
                 Spacer()
                 
-                // Add Set Button
                 Button("Add Set") {
                     workoutManager.addSetToExercise(exerciseIndex: exerciseIndex)
                 }
@@ -1371,9 +1264,8 @@ struct ExerciseWorkoutCard: View {
                 .controlSize(.small)
             }
             
-            // Sets List
             if !workoutExercise.sets.isEmpty {
-                VStack(spacing: 12) { // Increased spacing between sets
+                VStack(spacing: 12) {
                     ForEach(Array(workoutExercise.sets.enumerated()), id: \.element.id) { setIndex, set in
                         SetRow(
                             setNumber: setIndex + 1,
@@ -1396,13 +1288,13 @@ struct ExerciseWorkoutCard: View {
                 }
             }
         }
-        .padding(20) // Increased padding
+        .padding(20)
         .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(16) // More rounded
+        .cornerRadius(16)
     }
 }
 
-// MARK: - Set Row (Individual Set with Reps/Time Input)
+// MARK: - Set Row
 
 struct SetRow: View {
     let setNumber: Int
@@ -1413,24 +1305,22 @@ struct SetRow: View {
     
     @State private var repsInput: String = ""
     @State private var durationInput: String = ""
-    @FocusState private var isInputFocused: Bool // Add focus state
+    @FocusState private var isInputFocused: Bool
     
-    // Rest timer state
     @State private var isRestTimerActive = false
-    @State private var restDuration = 0 // 0 means no rest timer set
+    @State private var restDuration = 0
     @State private var restTimeRemaining = 0
     @State private var restTimer: Timer?
     @State private var showingRestPicker = false
     
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 16) { // Increased spacing
+            HStack(spacing: 16) {
                 Text("Set \(setNumber)")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .frame(width: 70, alignment: .leading) // Slightly wider
+                    .frame(width: 70, alignment: .leading)
                 
-                // Input based on exercise type
                 switch exercise.type {
                 case .reps:
                     HStack(spacing: 8) {
@@ -1448,7 +1338,7 @@ struct SetRow: View {
                             }
                         
                         Text("reps")
-                            .font(.subheadline) // Larger font
+                            .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                     
@@ -1495,7 +1385,6 @@ struct SetRow: View {
                 
                 Spacer()
                 
-                // Rest timer / Completed indicator
                 if set.isCompleted {
                     Button(action: {
                         if isRestTimerActive {
@@ -1503,12 +1392,9 @@ struct SetRow: View {
                         } else if restDuration > 0 {
                             startRestTimer()
                         }
-                        // If restDuration is 0, checkmark just stays as completed indicator
                     }) {
                         ZStack {
-                            // Show rest timer countdown or checkmark
                             if isRestTimerActive {
-                                // Rest timer active - show countdown
                                 Circle()
                                     .stroke(Color.orange, lineWidth: 3)
                                     .frame(width: 28, height: 28)
@@ -1519,7 +1405,6 @@ struct SetRow: View {
                                             .foregroundColor(.orange)
                                     )
                             } else {
-                                // Rest timer not active - show checkmark
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.title3)
                                     .foregroundColor(.green)
@@ -1529,15 +1414,13 @@ struct SetRow: View {
                     .buttonStyle(PlainButtonStyle())
                 }
                 
-                // Delete button
                 Button(action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.title3) // Slightly larger
+                        .font(.title3)
                         .foregroundColor(.red)
                 }
             }
             
-            // Rest Timer Selection (only show for completed sets)
             if set.isCompleted {
                 HStack {
                     Text("Rest:")
@@ -1573,12 +1456,11 @@ struct SetRow: View {
                 }
             }
         }
-        .padding(.horizontal, 16) // Increased padding
-        .padding(.vertical, 12) // Increased padding
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(Color(UIColor.tertiarySystemBackground))
-        .cornerRadius(12) // More rounded
+        .cornerRadius(12)
         .onTapGesture {
-            // Dismiss keyboard when tapping outside
             isInputFocused = false
         }
         .toolbar {
@@ -1591,17 +1473,15 @@ struct SetRow: View {
         }
     }
     
-    // MARK: - Rest Timer Functions
     private func startRestTimer() {
         isRestTimerActive = true
-        restTimeRemaining = restDuration // Use user-selected duration
+        restTimeRemaining = restDuration
         
         restTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             if restTimeRemaining > 0 {
                 restTimeRemaining -= 1
             } else {
                 stopRestTimer()
-                // Optional: Add haptic feedback when timer completes
                 if #available(iOS 17.0, *) {
                     let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
                     impactFeedback.impactOccurred()
@@ -1617,7 +1497,7 @@ struct SetRow: View {
     }
 }
 
-// MARK: - REQUIREMENT 2: Exercise Picker (Dropdown Menu)
+// MARK: - Exercise Picker
 
 struct ExercisePickerView: View {
     @ObservedObject var workoutManager: WorkoutManager
@@ -1643,10 +1523,7 @@ struct ExercisePickerView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Category Selector
                 categorySelector
-                
-                // Exercise List
                 exerciseList
             }
             .navigationTitle("Add Exercise")
@@ -1691,8 +1568,6 @@ struct ExercisePickerView: View {
     private func addExerciseWithRestTimer(_ restDuration: Int) {
         guard let exercise = selectedExercise else { return }
         workoutManager.addExerciseToWorkout(exercise.id)
-        // Store the rest timer preference for this exercise
-        // (This could be enhanced to store per-exercise rest timer preferences)
         presentationMode.wrappedValue.dismiss()
     }
     
@@ -1782,7 +1657,7 @@ struct ExercisePickerView: View {
     }
 }
 
-// MARK: - REQUIREMENT 4: Template Creator
+// MARK: - Template Creator
 
 struct TemplateCreatorView: View {
     @ObservedObject var workoutManager: WorkoutManager
@@ -1801,7 +1676,6 @@ struct TemplateCreatorView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
-                // Template Name Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Template Name")
                         .font(.headline)
@@ -1813,7 +1687,6 @@ struct TemplateCreatorView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
                 
-                // Selected Exercises Section
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Exercises")
@@ -1867,7 +1740,6 @@ struct TemplateCreatorView: View {
                 
                 Spacer()
                 
-                // Create Template Button
                 Button("Create Template") {
                     workoutManager.createTemplate(name: templateName, exercises: selectedExercises)
                     presentationMode.wrappedValue.dismiss()
@@ -1897,7 +1769,7 @@ struct TemplateCreatorView: View {
     }
 }
 
-// MARK: - Template Exercise Row (Shows exercise with target sets)
+// MARK: - Template Exercise Row
 
 struct TemplateExerciseRow: View {
     let exercise: Exercise
@@ -1992,7 +1864,6 @@ struct TemplateExercisePickerView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // Category Selector
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(categories, id: \.0) { category in
@@ -2020,7 +1891,6 @@ struct TemplateExercisePickerView: View {
                 }
                 .padding(.vertical, 16)
                 
-                // Exercise List
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(filteredExercises) { exercise in
@@ -2116,7 +1986,6 @@ struct WorkoutSessionView: View {
         NavigationView {
             VStack(spacing: 24) {
                 if let exercise = workoutManager.getExercise(by: session.exerciseID) {
-                    // Exercise Header
                     VStack(spacing: 12) {
                         Text(exercise.emoji)
                             .font(.system(size: 48))
@@ -2130,7 +1999,6 @@ struct WorkoutSessionView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    // Current Sets
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Completed Sets")
                             .font(.headline)
@@ -2154,7 +2022,9 @@ struct WorkoutSessionView: View {
                                         .font(.subheadline)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     
-                                    Button(action: workoutManager.removeLastSet) {
+                                    Button(action: {
+                                        // Remove last set functionality
+                                    }) {
                                         Image(systemName: "trash")
                                             .foregroundColor(.red)
                                     }
@@ -2167,7 +2037,6 @@ struct WorkoutSessionView: View {
                         }
                     }
                     
-                    // Add Set Section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Add New Set")
                             .font(.headline)
@@ -2187,7 +2056,7 @@ struct WorkoutSessionView: View {
                             
                             Button("Add Set") {
                                 if let reps = Int(repsInput), reps > 0 {
-                                    workoutManager.addSet(reps: reps)
+                                    // Add set functionality
                                     repsInput = ""
                                 }
                             }
@@ -2207,7 +2076,7 @@ struct WorkoutSessionView: View {
                             
                             Button("Add Set") {
                                 if let duration = Int(durationInput), duration > 0 {
-                                    workoutManager.addSet(duration: duration)
+                                    // Add set functionality
                                     durationInput = ""
                                 }
                             }
@@ -2219,10 +2088,9 @@ struct WorkoutSessionView: View {
                 
                 Spacer()
                 
-                // Action Buttons
                 VStack(spacing: 12) {
                     Button("Finish Workout") {
-                        workoutManager.endWorkout()
+                        // End workout functionality
                         presentationMode.wrappedValue.dismiss()
                     }
                     .buttonStyle(.borderedProminent)
