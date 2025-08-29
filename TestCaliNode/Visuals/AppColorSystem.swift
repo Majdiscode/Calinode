@@ -8,6 +8,28 @@
 
 import SwiftUI
 
+// MARK: - Color Extensions for Component Access
+extension Color {
+    var components: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        #if canImport(UIKit)
+        typealias NativeColor = UIColor
+        #elseif canImport(AppKit)
+        typealias NativeColor = NSColor
+        #endif
+        
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        
+        guard NativeColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else {
+            return (0, 0, 0, 0)
+        }
+        
+        return (r, g, b, a)
+    }
+}
+
 // MARK: - Global App Color Theme Protocol
 protocol AppColorTheme {
     // Core Brand Colors
@@ -20,6 +42,8 @@ protocol AppColorTheme {
     var background: Color { get }
     var surface: Color { get }
     var surfaceVariant: Color { get }
+    var onSurface: Color { get }
+    var outline: Color { get }
     var text: Color { get }
     var textSecondary: Color { get }
     var textOnPrimary: Color { get }
@@ -55,11 +79,14 @@ struct ElectricGradientTheme: AppColorTheme {
     var secondary: Color { Color(red: 0.3, green: 0.7, blue: 1.0) }        // Bright Blue-Cyan
     var accent: Color { Color(red: 1.0, green: 0.1, blue: 0.6) }           // Hot Pink
     var tertiary: Color { Color(red: 0.7, green: 0.2, blue: 0.95) }        // Vivid Purple
+    var pushBlue: Color { Color(red: 0.2, green: 0.6, blue: 1.0) }         // Push Tree Blue #3399FF
     
     // UI System Colors
     var background: Color { Color(UIColor.systemBackground) }
     var surface: Color { Color(UIColor.secondarySystemBackground) }
     var surfaceVariant: Color { Color(UIColor.tertiarySystemBackground) }
+    var onSurface: Color { Color.primary }
+    var outline: Color { Color.gray.opacity(0.3) }
     var text: Color { Color.primary }
     var textSecondary: Color { Color.secondary }
     var textOnPrimary: Color { Color.white }
@@ -145,6 +172,8 @@ struct LegacyCompatibilityTheme: AppColorTheme {
     var background: Color { Color(UIColor.systemBackground) }
     var surface: Color { Color(UIColor.secondarySystemBackground) }
     var surfaceVariant: Color { Color(UIColor.tertiarySystemBackground) }
+    var onSurface: Color { Color.primary }
+    var outline: Color { Color.gray.opacity(0.3) }
     var text: Color { Color.primary }
     var textSecondary: Color { Color.secondary }
     var textOnPrimary: Color { Color.white }
@@ -220,23 +249,55 @@ class AppColorManager: ObservableObject {
 // MARK: - Component-Specific Color Categories
 extension AppColorManager {
     
-    // MARK: - Skill Tree Colors
+    // MARK: - Skill Tree Colors (Miami Gradient Distribution)
     func skillTreeColor(for treeID: String) -> Color {
         switch treeID {
-        case "pull": return theme.primary
-        case "push": return theme.tertiary
-        case "core": return theme.secondary
-        case "legs": return theme.accent
+        case "pull": return theme.primary        // Electric Blue #00F0FF
+        case "push": return (theme as? ElectricGradientTheme)?.pushBlue ?? theme.secondary  // Push Tree Blue
+        case "core": return theme.tertiary       // Vivid Purple #B333F2
+        case "legs": return theme.accent         // Hot Pink #FF1A99
         default: return theme.primary
         }
     }
     
     func skillTreeGradient(for treeID: String) -> LinearGradient {
         switch treeID {
-        case "pull": return theme.primaryGradient
-        case "push": return theme.accentGradient
-        case "core": return theme.backgroundGradient
-        case "legs": return theme.skillGradient
+        case "pull": 
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    theme.primary,                                    // Electric Blue
+                    Color(red: 0.3, green: 0.7, blue: 1.0)          // Blue-Cyan
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case "push":
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    theme.secondary,                                 // Blue-Cyan
+                    (theme as? ElectricGradientTheme)?.pushBlue ?? theme.secondary  // Push Tree Blue
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case "core":
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.5, green: 0.4, blue: 1.0),         // Blue-Purple
+                    theme.tertiary                                    // Vivid Purple
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case "legs":
+            return LinearGradient(
+                gradient: Gradient(colors: [
+                    theme.tertiary,                                   // Vivid Purple
+                    theme.accent                                      // Hot Pink
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         default: return theme.primaryGradient
         }
     }
@@ -270,6 +331,48 @@ extension AppColorManager {
         case 0.5..<0.75: return theme.info
         case 0.75..<1.0: return theme.success
         default: return theme.accent // Complete!
+        }
+    }
+    
+    // MARK: - Vertical Gradient Colors (Tree Depth-Based)
+    func skillColorByDepth(for treeID: String, yPosition: CGFloat, canvasHeight: CGFloat) -> Color {
+        // Enhanced gradient calculation with MORE INTENSE depth effect
+        let normalizedY = max(0, min(1, yPosition / canvasHeight))
+        // Apply stronger exponential curve for dramatic progression
+        let gradientPosition = pow(normalizedY, 0.6) // More dramatic progression
+        
+        switch treeID {
+        case "pull":
+            // Electric Blue (top) → Deep Ocean Teal (bottom) - MORE INTENSE
+            return Color(
+                red: theme.primary.components.red * (1.0 - gradientPosition * 0.8),
+                green: theme.primary.components.green * (1.0 - gradientPosition * 0.6),
+                blue: 1.0 - gradientPosition * 0.4
+            )
+        case "push":
+            let pushColor = (theme as? ElectricGradientTheme)?.pushBlue ?? theme.secondary
+            // Push Blue (top) → Deep Royal Blue (bottom) - MORE INTENSE
+            return Color(
+                red: pushColor.components.red * (1.0 - gradientPosition * 0.7),
+                green: pushColor.components.green * (1.0 - gradientPosition * 0.6),
+                blue: 1.0 - gradientPosition * 0.3
+            )
+        case "core":
+            // Vivid Purple (top) → Deep Magenta (bottom) - MORE INTENSE
+            return Color(
+                red: theme.tertiary.components.red * (1.0 - gradientPosition * 0.5),
+                green: theme.tertiary.components.green * (1.0 - gradientPosition * 0.4),
+                blue: theme.tertiary.components.blue * (1.0 - gradientPosition * 0.3)
+            )
+        case "legs":
+            // Hot Pink (top) → Deep Crimson (bottom) - MORE INTENSE
+            return Color(
+                red: theme.accent.components.red * (1.0 - gradientPosition * 0.4),
+                green: theme.accent.components.green * (1.0 - gradientPosition * 0.6),
+                blue: theme.accent.components.blue * (1.0 - gradientPosition * 0.3)
+            )
+        default:
+            return skillTreeColor(for: treeID)
         }
     }
     

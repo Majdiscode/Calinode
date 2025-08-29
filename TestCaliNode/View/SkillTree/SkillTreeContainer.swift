@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SkillTreeContainer: View {
     @ObservedObject var skillManager: GlobalSkillManager
+    @EnvironmentObject var colorManager: AppColorManager
     @State private var selectedTreeIndex = 0
     
     var body: some View {
@@ -57,41 +58,78 @@ struct SkillTreeContainer: View {
                 let tree = allEnhancedSkillTrees[selectedTreeIndex]
                 let metadata = treeMetadata.first { $0.id == tree.id }
                 
-                HStack {
-                    Text(metadata?.emoji ?? "🌟")
-                        .font(.system(size: 20)) // Reduced from 32
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tree.name)
-                            .font(.headline) // Reduced from title2
-                            .fontWeight(.semibold)
+                // Redesigned progress card - text left, bar right
+                HStack(spacing: 16) {
+                    // Left side - Text content
+                    VStack(alignment: .leading, spacing: 4) {
+                        let progress = skillManager.getTreeProgress(tree.id)
+                        let progressPercentage = progress.total > 0 ? Double(progress.unlocked) / Double(progress.total) : 0
                         
-                        Text(metadata?.description ?? "")
-                            .font(.caption2) // Reduced from caption
+                        Text("Skills unlocked")
+                            .font(.caption)
+                            .fontWeight(.medium)
                             .foregroundColor(.secondary)
+                        
+                        Text("\(progress.unlocked)/\(progress.total)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
                     }
                     
                     Spacer()
                     
-                    // Progress indicator - smaller
-                    VStack(alignment: .trailing, spacing: 2) {
+                    // Right side - Progress bar
+                    VStack(spacing: 6) {
                         let progress = skillManager.getTreeProgress(tree.id)
                         let progressPercentage = progress.total > 0 ? Double(progress.unlocked) / Double(progress.total) : 0
                         
-                        Text("\(progress.unlocked)/\(progress.total)")
-                            .font(.caption2) // Reduced from caption
-                            .fontWeight(.medium)
+                        Text("\(Int(progressPercentage * 100))%")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
                             .foregroundColor(.secondary)
                         
-                        ProgressView(value: progressPercentage)
-                            .progressViewStyle(LinearProgressViewStyle(tint: progressPercentage == 1.0 ? .green : .blue))
-                            .frame(width: 40, height: 4) // Smaller
+                        RoundedRectangle(cornerRadius: 6)
+                            .frame(width: 100, height: 8)
+                            .background(Color.gray.opacity(0.2))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(
+                                        progressPercentage == 1.0 ? 
+                                        LinearGradient(
+                                            colors: [colorManager.theme.success, colorManager.theme.success.opacity(0.8)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ) :
+                                        colorManager.skillTreeGradient(for: tree.id)
+                                    )
+                                    .frame(width: 100 * progressPercentage, height: 8)
+                                    .animation(.easeInOut(duration: 0.3), value: progressPercentage),
+                                alignment: .leading
+                            )
                     }
                 }
-                .padding(10) // Reduced from 16
-                .background(Color(UIColor.secondarySystemBackground))
-                .cornerRadius(8) // Reduced from 12
-                .animation(.easeInOut(duration: 0.6), value: selectedTreeIndex) // Updated duration
+                .padding(20) // Increased padding for larger card
+                .background(
+                    // High contrast background with subtle gradient
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(UIColor.systemBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(colorManager.skillTreeGradient(for: tree.id).opacity(0.05))
+                        )
+                )
+                .overlay(
+                    // Enhanced border for better visibility
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(colorManager.skillTreeColor(for: tree.id).opacity(0.3), lineWidth: 1)
+                )
+                .shadow(
+                    color: colorManager.skillTreeColor(for: tree.id).opacity(0.15),
+                    radius: 8,
+                    x: 0,
+                    y: 4
+                )
+                .animation(.easeInOut(duration: 0.6), value: selectedTreeIndex)
             }
             
             // Tree navigation dots - Smaller
@@ -105,25 +143,29 @@ struct SkillTreeContainer: View {
                         let tree = allEnhancedSkillTrees[index]
                         let metadata = treeMetadata.first { $0.id == tree.id }
                         
-                        VStack(spacing: 2) { // Reduced from 4
+                        VStack(spacing: 4) {
                             Text(metadata?.emoji ?? "🌟")
-                                .font(selectedTreeIndex == index ? .body : .caption) // Smaller
-                                .scaleEffect(selectedTreeIndex == index ? 1.1 : 1.0) // Reduced from 1.2
+                                .font(selectedTreeIndex == index ? .title2 : .title3)
+                                .scaleEffect(selectedTreeIndex == index ? 1.1 : 1.0)
                             
-                            Text(tree.name.prefix(4))
-                                .font(.caption2) // Smaller
-                                .fontWeight(selectedTreeIndex == index ? .medium : .regular)
-                                .foregroundColor(selectedTreeIndex == index ? .primary : .secondary)
+                            Text(tree.name)
+                                .font(.caption)
+                                .fontWeight(selectedTreeIndex == index ? .semibold : .medium)
+                                .foregroundColor(selectedTreeIndex == index ? .white : .primary)
                         }
                         .padding(.vertical, 4) // Reduced from 8
                         .padding(.horizontal, 8) // Reduced from 12
                         .background(
-                            RoundedRectangle(cornerRadius: 6) // Reduced from 8
-                                .fill(selectedTreeIndex == index ? Color.blue.opacity(0.1) : Color.clear)
+                            RoundedRectangle(cornerRadius: 12) // UI design system standard for buttons
+                                .fill(selectedTreeIndex == index ? 
+                                      colorManager.skillTreeGradient(for: tree.id) : 
+                                      LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6) // Reduced from 8
-                                .stroke(selectedTreeIndex == index ? Color.blue : Color.clear, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 12) // UI design system standard for buttons
+                                .stroke(selectedTreeIndex == index ? 
+                                       colorManager.skillTreeColor(for: tree.id) : 
+                                       Color.clear, lineWidth: 2) // 2pt weight per UI design
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -132,8 +174,8 @@ struct SkillTreeContainer: View {
             }
             .padding(.horizontal, 16) // Reduced from 20
         }
-        .padding(.horizontal, 16) // Reduced from 20
-        .padding(.top, 6) // Reduced from 10
+        .padding(.horizontal, 24) // Following UI design system (24pt margins)
+        .padding(.top, 32) // Generous vertical spacing as per UI doc
         .background(Color(UIColor.systemBackground))
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1) // Smaller shadow
     }
