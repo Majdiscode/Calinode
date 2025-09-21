@@ -14,6 +14,7 @@ struct SkillTreeOverlays: ViewModifier {
     let onConfirm: () -> Void
     let onCancel: () -> Void
     let onDismissError: () -> Void
+    @ObservedObject var skillManager: GlobalSkillManager
     
     func body(content: Content) -> some View {
         content
@@ -26,7 +27,8 @@ struct SkillTreeOverlays: ViewModifier {
                                 ConfirmationCardView(
                                     prompt: skill.confirmPrompt,
                                     confirmAction: onConfirm,
-                                    cancelAction: onCancel
+                                    cancelAction: onCancel,
+                                    treeID: skill.tree
                                 )
                             )
                             .zIndex(10)
@@ -115,7 +117,8 @@ extension View {
         prereqMessage: String?,
         onConfirm: @escaping () -> Void,
         onCancel: @escaping () -> Void,
-        onDismissError: @escaping () -> Void
+        onDismissError: @escaping () -> Void,
+        skillManager: GlobalSkillManager
     ) -> some View {
         modifier(SkillTreeOverlays(
             showCard: showCard,
@@ -123,7 +126,8 @@ extension View {
             prereqMessage: prereqMessage,
             onConfirm: onConfirm,
             onCancel: onCancel,
-            onDismissError: onDismissError
+            onDismissError: onDismissError,
+            skillManager: skillManager
         ))
     }
 }

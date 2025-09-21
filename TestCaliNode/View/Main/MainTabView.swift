@@ -14,6 +14,7 @@ struct MainTabView: View {
     @StateObject private var workoutManager = {
         WorkoutManager()
     }()
+    @StateObject private var colorManager = AppColorManager(useElectricTheme: true)
     @ObservedObject private var questManager = QuestManager.shared
     @State private var selectedTab = 0
     
@@ -21,6 +22,7 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             // Skills Tab
             SkillTreeContainer(skillManager: skillManager)
+                .environmentObject(colorManager)
                 .tabItem {
                     Label("Skills", systemImage: "tree")
                 }
@@ -60,6 +62,15 @@ struct MainTabView: View {
             // Connect managers for quest system integration
             questManager.setSkillManager(skillManager)
             questManager.setWorkoutManager(workoutManager)
+            
+            // Listen for checkpoint achievements that should navigate to quests
+            NotificationCenter.default.addObserver(
+                forName: NSNotification.Name("NavigateToQuests"),
+                object: nil,
+                queue: .main
+            ) { _ in
+                selectedTab = 2 // Switch to quests tab
+            }
         }
     }
 }

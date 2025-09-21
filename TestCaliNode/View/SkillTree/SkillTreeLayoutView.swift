@@ -58,7 +58,8 @@ struct EnhancedSkillTreeLayoutView: View {
                                 },
                                 cancelAction: {
                                     showCard = false
-                                }
+                                },
+                                treeID: skill.tree
                             )
                         )
                         .zIndex(10)

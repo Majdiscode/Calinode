@@ -175,6 +175,9 @@ class WorkoutManager: ObservableObject {
     @Published var workoutHistory: [ActiveWorkout] = []
     @Published var currentSession: WorkoutSession?
     
+    // Timer manager for rest timers and workout timing
+    let timerManager = WorkoutTimerManager()
+    
     private let db = Firestore.firestore()
     
     init() {
@@ -1282,7 +1285,8 @@ struct ExerciseWorkoutCard: View {
                             },
                             onDelete: {
                                 workoutManager.removeSet(exerciseIndex: exerciseIndex, setIndex: setIndex)
-                            }
+                            },
+                            timerManager: workoutManager.timerManager
                         )
                     }
                 }
@@ -1302,15 +1306,14 @@ struct SetRow: View {
     let exercise: Exercise
     let onUpdate: (Int?, Int?, Double?) -> Void
     let onDelete: () -> Void
+    @ObservedObject var timerManager: WorkoutTimerManager
     
     @State private var repsInput: String = ""
     @State private var durationInput: String = ""
+    @State private var distanceInput: String = ""
     @FocusState private var isInputFocused: Bool
     
-    @State private var isRestTimerActive = false
-    @State private var restDuration = 0
-    @State private var restTimeRemaining = 0
-    @State private var restTimer: Timer?
+    @State private var restDuration = 60 // Default 60 seconds
     @State private var showingRestPicker = false
     
     var body: some View {
@@ -1364,15 +1367,15 @@ struct SetRow: View {
                     
                 case .distance:
                     HStack(spacing: 8) {
-                        TextField("0", text: $durationInput)
+                        TextField("0", text: $distanceInput)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .keyboardType(.decimalPad)
                             .frame(width: 80)
                             .focused($isInputFocused)
                             .onAppear {
-                                durationInput = set.distance != nil && set.distance! > 0 ? "\(set.distance!)" : ""
+                                distanceInput = set.distance != nil && set.distance! > 0 ? "\(set.distance!)" : ""
                             }
-                            .onChange(of: durationInput) { _, newValue in
+                            .onChange(of: distanceInput) { _, newValue in
                                 let distance = Double(newValue) ?? 0
                                 onUpdate(nil, nil, distance > 0 ? distance : nil)
                             }
@@ -1387,19 +1390,23 @@ struct SetRow: View {
                 
                 if set.isCompleted {
                     Button(action: {
-                        if isRestTimerActive {
-                            stopRestTimer()
+                        if timerManager.timerState == .running {
+                            timerManager.stopTimer()
                         } else if restDuration > 0 {
-                            startRestTimer()
+                            timerManager.startRestTimer(
+                                duration: TimeInterval(restDuration),
+                                exerciseName: exercise.name,
+                                setNumber: setNumber
+                            )
                         }
                     }) {
                         ZStack {
-                            if isRestTimerActive {
+                            if timerManager.timerState == .running && timerManager.currentTimer?.type == .rest {
                                 Circle()
                                     .stroke(Color.orange, lineWidth: 3)
                                     .frame(width: 28, height: 28)
                                     .overlay(
-                                        Text("\(restTimeRemaining)")
+                                        Text("\(Int(timerManager.timeRemaining))")
                                             .font(.caption2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.orange)
@@ -1473,28 +1480,6 @@ struct SetRow: View {
         }
     }
     
-    private func startRestTimer() {
-        isRestTimerActive = true
-        restTimeRemaining = restDuration
-        
-        restTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if restTimeRemaining > 0 {
-                restTimeRemaining -= 1
-            } else {
-                stopRestTimer()
-                if #available(iOS 17.0, *) {
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
-                }
-            }
-        }
-    }
-    
-    private func stopRestTimer() {
-        isRestTimerActive = false
-        restTimer?.invalidate()
-        restTimer = nil
-    }
 }
 
 // MARK: - Exercise Picker

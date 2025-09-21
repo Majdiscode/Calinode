@@ -9,7 +9,9 @@ struct ConfirmationCardView: View {
     let prompt: String
     let confirmAction: () -> Void
     let cancelAction: () -> Void
+    let treeID: String?
     @Environment(\.colorScheme) var colorScheme
+    @StateObject private var colorManager = AppColorManager(useElectricTheme: true)
     @State private var animateCard = false
 
     var body: some View {
@@ -49,8 +51,8 @@ struct ConfirmationCardView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Color(hex: "#dfceac"))
-                        .foregroundColor(.black)
+                        .background(treeID != nil ? colorManager.skillTreeColor(for: treeID!) : Color(hex: "#dfceac"))
+                        .foregroundColor(.white)
                         .clipShape(Capsule())
                 }
             }

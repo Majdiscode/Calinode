@@ -13,6 +13,7 @@ import SwiftUI
 class GlobalSkillManager: ObservableObject {
     @Published var unlockedSkills: Set<String> = []
     @Published var allSkills: [String: SkillNode] = [:]
+    // Removed checkpoint overlays - moving to Quest System
     
     internal let db = Firestore.firestore()
     
@@ -83,8 +84,13 @@ class GlobalSkillManager: ObservableObject {
         
         saveProgress(skillID)
         
+        // Notify Quest System about skill unlock
+        NotificationCenter.default.post(name: NSNotification.Name("SkillUnlocked"), object: skillID)
+        
         print("🔓 Unlocked skill: \(skillID)")
     }
+    
+    // Checkpoint celebrations moved to Quest System
     
     func isUnlocked(_ skillID: String) -> Bool {
         return unlockedSkills.contains(skillID)

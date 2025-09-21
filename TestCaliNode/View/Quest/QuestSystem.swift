@@ -101,6 +101,8 @@ enum QuestType: String, Codable {
     case exploration = "exploration"
     case consistency = "consistency"
     case improvement = "improvement"
+    case checkpoint = "checkpoint"           // NEW: Milestone achievements
+    case goalPath = "goal_path"              // NEW: Multi-step progression paths
 }
 
 enum QuestDifficulty: String, Codable {
@@ -235,6 +237,19 @@ class QuestManager: ObservableObject {
     
     private init() {
         setupAuthListener()
+        setupSkillUnlockListener()
+    }
+    
+    private func setupSkillUnlockListener() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SkillUnlocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let skillID = notification.object as? String {
+                self?.handleSkillUnlock(skillID)
+            }
+        }
     }
     
     private func setupAuthListener() {
@@ -642,6 +657,16 @@ class QuestManager: ObservableObject {
                 targetValue: 1,
                 xpReward: 100,
                 coinReward: 25
+            ),
+            Quest(
+                title: "First Pull-Up Milestone",
+                description: "Unlock your first pullUp in the Skills tree - the foundation of all upper body calisthenics!",
+                emoji: "🎯",
+                type: .checkpoint,
+                difficulty: .challenger,
+                targetValue: 1,
+                xpReward: 200,
+                coinReward: 50
             )
         ]
     }
@@ -883,6 +908,10 @@ class QuestManager: ObservableObject {
             case .consistency:
                 // Handle streak-based quests
                 break
+                
+            case .checkpoint, .goalPath:
+                // These are handled by skill unlock notifications, not workout completion
+                break
             }
         }
         
@@ -1006,6 +1035,70 @@ class QuestManager: ObservableObject {
     
     func updateQuestProgress(skillUnlocked: String) {
         // Keep for compatibility
+    }
+    
+    // MARK: - Checkpoint Quest Generation
+    
+    private func handleSkillUnlock(_ skillID: String) {
+        // Check if this is a major checkpoint
+        if CheckpointMilestoneSystem.isCheckpoint(skillID) {
+            generateCheckpointQuestCompletionAndNewGoals(for: skillID)
+        }
+    }
+    
+    private func generateCheckpointQuestCompletionAndNewGoals(for skillID: String) {
+        // Complete any existing checkpoint quest
+        completeCheckpointQuest(for: skillID)
+        
+        // Generate new goal-path quests
+        generateGoalPathQuests(unlockedCheckpoint: skillID)
+        
+        // Navigate user to quest tab to see new unlocks
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            NotificationCenter.default.post(name: NSNotification.Name("NavigateToQuests"), object: nil)
+        }
+    }
+    
+    private func completeCheckpointQuest(for skillID: String) {
+        // Find and complete any quest related to unlocking this skill
+        for i in 0..<dailyQuests.count {
+            if dailyQuests[i].type == .checkpoint && 
+               dailyQuests[i].description.contains(skillID) && 
+               !dailyQuests[i].isCompleted {
+                completeQuest(at: i)
+                print("🎉 Checkpoint quest completed for: \(skillID)")
+                break
+            }
+        }
+    }
+    
+    private func generateGoalPathQuests(unlockedCheckpoint: String) {
+        // Get available progression paths for this checkpoint
+        let availablePaths = CheckpointMilestoneSystem.progressionPaths.filter { path in
+            // Don't show paths for skills user already achieved
+            return !(skillManager?.isUnlocked(path.goalSkillId) ?? false)
+        }
+        
+        // Generate quests for each goal path (max 3)
+        for path in availablePaths.prefix(3) {
+            let goalQuest = Quest(
+                title: "Path to \(path.goalName)",
+                description: "Master the \(path.goalDifficulty)-star \(path.goalName) in \(path.estimatedTimeframe)",
+                emoji: path.goalEmoji,
+                type: .goalPath,
+                difficulty: .challenger, // Always challenging goals
+                targetValue: path.steps.count, // Complete all steps
+                xpReward: path.goalDifficulty * 100, // Higher difficulty = more XP
+                coinReward: path.goalDifficulty * 50
+            )
+            
+            // Add to available quests (don't replace daily quests)
+            dailyQuests.append(goalQuest)
+            print("🎯 New goal quest added: \(path.goalName)")
+        }
+        
+        // Save updated quests
+        saveDailyQuestsToFirebase()
     }
     
     func triggerFoundationalSkillUnlock() {
