@@ -93,36 +93,38 @@ struct SkillTreeLayoutContainer: View {
     
     // MARK: - Skill Tree Canvas with Dynamic Size
     private var skillTreeCanvas: some View {
-        ScrollView {
-            ZStack {
-                connectionLines
-                skillNodes
+        GeometryReader { geometry in
+            ScrollView {
+                ZStack {
+                    connectionLines
+                    skillNodes
+                }
+                .frame(width: UIScreen.main.bounds.width, height: calculateCanvasHeight())
+                .clipped()
             }
-            .frame(width: UIScreen.main.bounds.width, height: calculateCanvasHeight())
-            .clipped()
+            .scrollDisabled(calculateCanvasHeight() <= geometry.size.height)
         }
     }
     
     // MARK: - Standardized Canvas Height Calculation for Consistency
     private func calculateCanvasHeight() -> CGFloat {
-        guard !skillTree.allPositions.isEmpty else { return 1200 } // Consistent fallback
-        
+        guard !skillTree.allPositions.isEmpty else { return 800 } // Consistent fallback
+
         // Find the min and max Y positions from all skills
         let yPositions = skillTree.allPositions.values.map { $0.y }
         let minY = yPositions.min() ?? 0
         let maxY = yPositions.max() ?? 600
         let contentHeight = maxY - minY
-        
+
         // Standardized padding calculation for consistent tree sizes
-        // Ensure all trees have similar proportional spacing regardless of their Y range
-        let standardTopPadding: CGFloat = 120
-        let standardBottomPadding: CGFloat = 200
-        
-        // Minimum canvas height to ensure consistency across trees
+        // Reduced padding to limit excessive scrolling
+        let standardTopPadding: CGFloat = 100
+        let standardBottomPadding: CGFloat = 80
+
+        // Calculate height based on actual content
         let calculatedHeight = contentHeight + standardTopPadding + standardBottomPadding
-        let minimumHeight: CGFloat = 1200 // Ensure all trees have at least this height for consistency
-        
-        return max(calculatedHeight, minimumHeight)
+
+        return calculatedHeight
     }
     
     private var connectionLines: some View {
@@ -207,17 +209,18 @@ struct SkillTreeLayoutContainer: View {
             if let position = skillTree.allPositions[skill.id] {
                 let isVisible = selectedBranch == nil || isSkillInSelectedBranch(skill)
                 let isUnlocked = skillManager.isUnlocked(skill.id)
+                let canUnlock = skillManager.canUnlock(skill.id)
                 let metrics = treeMetrics
-                
+
                 // Standardized position adjustment for tree size consistency
                 let standardTopPadding: CGFloat = 120
                 let adjustedPosition = CGPoint(x: position.x, y: position.y - metrics.minY + standardTopPadding)
-                
+
                 // Future-proof gradient calculation - normalizes any skill position range to 0-1
                 let yRange = metrics.maxY - metrics.minY
                 let normalizedY = yRange > 0 ? (position.y - metrics.minY) / yRange : 0
                 let depthColor = colorManager.skillColorByDepth(for: skillTree.id, yPosition: normalizedY * metrics.canvasHeight, canvasHeight: metrics.canvasHeight)
-                
+
                 Text(skill.label)
                     .font(.system(size: 28))
                     .frame(width: 70, height: 70)
@@ -225,9 +228,11 @@ struct SkillTreeLayoutContainer: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: isUnlocked ? 
+                                    colors: isUnlocked ?
                                         [depthColor, depthColor.opacity(0.7)] :
-                                        [depthColor.opacity(0.6), depthColor.opacity(0.4)],
+                                        canUnlock ?
+                                            [depthColor.opacity(0.5), depthColor.opacity(0.3)] :
+                                            [Color.black, Color.black.opacity(0.8)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -236,22 +241,32 @@ struct SkillTreeLayoutContainer: View {
                     .foregroundColor(isUnlocked ? .white : .primary)
                     .overlay(
                         Circle()
-                            .stroke(depthColor, lineWidth: isUnlocked ? 4 : 3)
-                            .opacity(isUnlocked ? 1.0 : 0.8)
+                            .stroke(depthColor, lineWidth: isUnlocked ? 4 : canUnlock ? 3 : 2)
+                            .opacity(isUnlocked ? 1.0 : canUnlock ? 0.9 : 0.6)
+                    )
+                    .overlay(
+                        Group {
+                            if !isUnlocked && !canUnlock {
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(.white.opacity(0.9))
+                                    .font(.system(size: 22, weight: .bold))
+                            }
+                        }
                     )
                     .shadow(
-                        color: isUnlocked ? depthColor.opacity(0.4) : .clear,
-                        radius: isUnlocked ? 8 : 0,
+                        color: isUnlocked ? depthColor.opacity(0.4) : canUnlock ? depthColor.opacity(0.3) : .clear,
+                        radius: isUnlocked ? 8 : canUnlock ? 6 : 0,
                         x: 0,
-                        y: isUnlocked ? 4 : 0
+                        y: isUnlocked ? 4 : canUnlock ? 3 : 0
                     )
                     .scaleEffect(isUnlocked ? 1.0 : 0.9)
+                    .pulseEffect(isActive: !isUnlocked && canUnlock)
                     .position(adjustedPosition)
                     .id(skill.id)
                     .opacity(isVisible ? 1.0 : 0.2)
                     .scaleEffect(isVisible ? 1.0 : 0.7)
                     .animation(.easeInOut(duration: 0.4), value: isVisible)
-                    .animation(.spring(response: 0.4), value: isUnlocked)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.6), value: isUnlocked)
                     .onTapGesture {
                         handleSkillTap(skill: skill)
                     }
@@ -355,20 +370,20 @@ struct EnhancedLineConnector: View {
     let from: CGPoint
     let to: CGPoint
     let color: Color
-    
+
     private let nodeRadius: CGFloat = 35 // Half of the 70pt circle size
-    
+
     var body: some View {
         Canvas { context, size in
             // Calculate the direction vector
             let dx = to.x - from.x
             let dy = to.y - from.y
             let distance = sqrt(dx * dx + dy * dy)
-            
+
             // Normalize the direction vector
             let unitX = dx / distance
             let unitY = dy / distance
-            
+
             // Calculate connection points at circle edges
             let startPoint = CGPoint(
                 x: from.x + unitX * nodeRadius,
@@ -378,11 +393,57 @@ struct EnhancedLineConnector: View {
                 x: to.x - unitX * nodeRadius,
                 y: to.y - unitY * nodeRadius
             )
-            
+
             var path = SwiftUI.Path()
             path.move(to: startPoint)
             path.addLine(to: endPoint)
-            context.stroke(path, with: .color(color), lineWidth: 4) // Thicker connection lines
+            context.stroke(path, with: .color(color), lineWidth: 6) // Thicker connection lines
         }
+    }
+}
+
+// MARK: - Pulse Effect Modifier for Unlockable Nodes
+struct PulseEffectModifier: ViewModifier {
+    let isActive: Bool
+    @State private var isPulsing = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isActive && isPulsing ? 1.05 : 1.0)
+            .opacity(isActive && isPulsing ? 1.0 : 1.0)
+            .onChange(of: isActive) { newValue in
+                if newValue {
+                    withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
+                    // Stop pulsing after 5 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            isPulsing = false
+                        }
+                    }
+                } else {
+                    isPulsing = false
+                }
+            }
+            .onAppear {
+                if isActive {
+                    withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                        isPulsing = true
+                    }
+                    // Stop pulsing after 5 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            isPulsing = false
+                        }
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func pulseEffect(isActive: Bool) -> some View {
+        modifier(PulseEffectModifier(isActive: isActive))
     }
 }
